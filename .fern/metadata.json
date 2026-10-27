@@ -1,0 +1,18 @@
+{
+    "cliVersion": "5.175.0",
+    "generatorName": "fernapi/fern-typescript-sdk",
+    "generatorVersion": "3.108.0",
+    "generatorConfig": {
+        "namespaceExport": "Decisions",
+        "noSerdeLayer": false,
+        "packageJson": {
+            "name": "@humeai/decisions"
+        }
+    },
+    "originGitCommit": "2a86c39d2ee27416096f24af12dda45e2fa04898",
+    "originGitCommitIsDirty": false,
+    "invokedBy": "ci",
+    "requestedVersion": "0.1.0",
+    "ciProvider": "github",
+    "sdkVersion": "0.1.0"
+}
