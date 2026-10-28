@@ -3,7 +3,7 @@
 /**
  * Asks when an event occurs in the audio.
  */
-export interface SpanQuestion {
+export interface MomentQuestion {
     /** The question, written in natural language. */
     instructions: string;
 }

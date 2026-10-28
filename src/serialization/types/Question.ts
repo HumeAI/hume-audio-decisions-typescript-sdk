@@ -4,16 +4,16 @@ import type * as Decisions from "../../api/index.js";
 import * as core from "../../core/index.js";
 import type * as serializers from "../index.js";
 import { ChoiceQuestion } from "./ChoiceQuestion.js";
+import { MomentQuestion } from "./MomentQuestion.js";
 import { NoulQuestion } from "./NoulQuestion.js";
 import { ScoreQuestion } from "./ScoreQuestion.js";
-import { SpanQuestion } from "./SpanQuestion.js";
 
 export const Question: core.serialization.Schema<serializers.Question.Raw, Decisions.Question> = core.serialization
     .union("type", {
         noul: NoulQuestion,
         choice: ChoiceQuestion,
         score: ScoreQuestion,
-        span: SpanQuestion,
+        moment: MomentQuestion,
     })
     .transform<Decisions.Question>({
         transform: (value) => value,
@@ -21,7 +21,7 @@ export const Question: core.serialization.Schema<serializers.Question.Raw, Decis
     });
 
 export declare namespace Question {
-    export type Raw = Question.Noul | Question.Choice | Question.Score | Question.Span;
+    export type Raw = Question.Noul | Question.Choice | Question.Score | Question.Moment;
 
     export interface Noul extends NoulQuestion.Raw {
         type: "noul";
@@ -35,7 +35,7 @@ export declare namespace Question {
         type: "score";
     }
 
-    export interface Span extends SpanQuestion.Raw {
-        type: "span";
+    export interface Moment extends MomentQuestion.Raw {
+        type: "moment";
     }
 }
