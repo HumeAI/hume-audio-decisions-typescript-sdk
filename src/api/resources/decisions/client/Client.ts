@@ -51,7 +51,7 @@ export class DecisionsClient {
      * | Whether something is true of the audio | `noul` | The share of raters who would answer yes |
      * | Which of several options applies | `choice` | The probability of each option, and the most likely one |
      * | Where the audio falls on an ordered scale | `score` | The probability of each level, and the probability-weighted mean level |
-     * | When an event occurs | `span` | The time spans where the event may occur, in milliseconds from the start of the file |
+     * | When an event occurs | `moment` | The moments where the event may occur, in milliseconds from the start of the file |
      *
      * ## Using the answers
      *
@@ -105,7 +105,7 @@ export class DecisionsClient {
      *                     criteria: ["Not at all", "2", "3", "4", "Extremely"]
      *                 },
      *                 "agent_glitches": {
-     *                     type: "span",
+     *                     type: "moment",
      *                     instructions: "Where does the agent glitch, slur or sound robotic?"
      *                 }
      *             }
@@ -182,7 +182,7 @@ export class DecisionsClient {
      *             context: "A clip from a licensed corpus of scripted speech by consenting voice actors, being labeled to train an expressive text-to-speech model.",
      *             questions: {
      *                 "vocal_bursts": {
-     *                     type: "span",
+     *                     type: "moment",
      *                     instructions: "Where does the speaker laugh, sigh, gasp or make another vocal burst?"
      *                 }
      *             }
@@ -425,7 +425,7 @@ export class DecisionsClient {
      *                     criteria: ["Not at all", "2", "3", "4", "Extremely"]
      *                 },
      *                 "agent_glitches": {
-     *                     type: "span",
+     *                     type: "moment",
      *                     instructions: "Where does the agent glitch, slur or sound robotic?"
      *                 }
      *             }
