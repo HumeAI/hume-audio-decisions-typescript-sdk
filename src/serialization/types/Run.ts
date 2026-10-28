@@ -11,7 +11,7 @@ export const Run: core.serialization.ObjectSchema<serializers.Run.Raw, Decisions
     userId: core.serialization.property("user_id", core.serialization.string()),
     status: RunStatus,
     startedAt: core.serialization.property("started_at", core.serialization.date()),
-    endedAt: core.serialization.property("ended_at", core.serialization.date().nullable()),
+    endedAt: core.serialization.property("ended_at", core.serialization.date()),
     bytesReceived: core.serialization.property("bytes_received", core.serialization.number()),
     request: DecisionsRequest,
 });
@@ -22,7 +22,7 @@ export declare namespace Run {
         user_id: string;
         status: RunStatus.Raw;
         started_at: string;
-        ended_at?: string | null;
+        ended_at: string;
         bytes_received: number;
         request: DecisionsRequest.Raw;
     }

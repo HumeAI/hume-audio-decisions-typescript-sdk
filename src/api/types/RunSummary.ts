@@ -13,8 +13,8 @@ export interface RunSummary {
     status: Decisions.RunStatus;
     /** When the run started. */
     startedAt: Date;
-    /** When the run ended. Null while it is in progress. */
-    endedAt: Date | null;
+    /** When the run ended. */
+    endedAt: Date;
     /** The size of the `file` part, in bytes. */
     bytesReceived: number;
 }

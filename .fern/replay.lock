@@ -12,5 +12,162 @@ generations:
     cli_version: unknown
     generator_versions:
       fernapi/fern-typescript-sdk: 3.108.0
-current_generation: 06463a1a873539a537a10ee887ac21fecd21e32f
-patches: []
+  - commit_sha: d9b6fb26226de6e6e46971e2345ee1de94f6c534
+    tree_hash: 851207bc8b37753a3e528945b7319901e916ad5f
+    timestamp: 2026-10-28T16:26:08.387Z
+    cli_version: unknown
+    generator_versions:
+      fernapi/fern-typescript-sdk: 3.108.0
+current_generation: d9b6fb26226de6e6e46971e2345ee1de94f6c534
+patches:
+  - id: patch-9b37cd53
+    content_hash: sha256:7ed49a2a2b4c3a71af88da8225a66e481dcbb58b512fb16b3427f1d69cddbae5
+    original_commit: 9b37cd531065801be38abacda2412f6236d9e1bc
+    original_message: Publish only from version tags that match the package version, using trusted publishing through a registry environment
+    original_author: zach <zachary.greathouse@hume.ai>
+    base_generation: d9b6fb26226de6e6e46971e2345ee1de94f6c534
+    files:
+      - .github/workflows/ci.yml
+    patch_content: |+
+      diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+      index 935ef8c..be0fe51 100644
+      --- a/.github/workflows/ci.yml
+      +++ b/.github/workflows/ci.yml
+      @@ -47,8 +47,13 @@ jobs:
+       
+         publish:
+           needs: [ compile, test ]
+      -    if: github.event_name == 'push' && contains(github.ref, 'refs/tags/')
+      +    # Only version tags publish. Fern pushes a tag of its own to this repository, and that tag must
+      +    # not release the package.
+      +    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+           runs-on: ubuntu-latest
+      +    environment:
+      +      name: npm
+      +      url: https://www.npmjs.com/package/@humeai/decisions
+           permissions:
+             contents: read   # Required for checkout
+             id-token: write  # Required for OIDC
+      @@ -61,6 +66,16 @@ jobs:
+               with:
+                 node-version: "lts/Krypton"
+       
+      +      # A published version can never be published again, so a tag on the wrong commit must fail
+      +      # here rather than release whatever version that commit holds.
+      +      - name: Check the tag matches the package version
+      +        run: |
+      +          PKG_VERSION=$(node -p "require('./package.json').version")
+      +          if [[ "${GITHUB_REF_NAME}" != "v${PKG_VERSION}" ]]; then
+      +            echo "::error::Tag ${GITHUB_REF_NAME} does not match package version ${PKG_VERSION}."
+      +            exit 1
+      +          fi
+      +
+             - name: Install pnpm
+               uses: pnpm/action-setup@v4
+       
+    theirs_snapshot:
+      .github/workflows/ci.yml: |-
+        name: ci
+
+        on: [push]
+
+        concurrency:
+          group: ${{ github.workflow }}-${{ github.ref }}
+          cancel-in-progress: false
+
+        jobs:
+          compile:
+            runs-on: ubuntu-latest
+
+            steps:
+              - name: Checkout repo
+                uses: actions/checkout@v6
+
+              - name: Set up node
+                uses: actions/setup-node@v6
+
+              - name: Install pnpm
+                uses: pnpm/action-setup@v4
+
+              - name: Install dependencies
+                run: pnpm install --frozen-lockfile
+
+              - name: Compile
+                run: pnpm build
+
+          test:
+            runs-on: ubuntu-latest
+
+            steps:
+              - name: Checkout repo
+                uses: actions/checkout@v6
+
+              - name: Set up node
+                uses: actions/setup-node@v6
+                        
+              - name: Install pnpm
+                uses: pnpm/action-setup@v4
+
+              - name: Install dependencies
+                run: pnpm install --frozen-lockfile
+
+              - name: Test
+                run: pnpm test
+
+          publish:
+            needs: [ compile, test ]
+            # Only version tags publish. Fern pushes a tag of its own to this repository, and that tag must
+            # not release the package.
+            if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+            runs-on: ubuntu-latest
+            environment:
+              name: npm
+              url: https://www.npmjs.com/package/@humeai/decisions
+            permissions:
+              contents: read   # Required for checkout
+              id-token: write  # Required for OIDC
+            steps:
+              - name: Checkout repo
+                uses: actions/checkout@v6
+
+              - name: Set up node
+                uses: actions/setup-node@v6
+                with:
+                  node-version: "lts/Krypton"
+
+              # A published version can never be published again, so a tag on the wrong commit must fail
+              # here rather than release whatever version that commit holds.
+              - name: Check the tag matches the package version
+                run: |
+                  PKG_VERSION=$(node -p "require('./package.json').version")
+                  if [[ "${GITHUB_REF_NAME}" != "v${PKG_VERSION}" ]]; then
+                    echo "::error::Tag ${GITHUB_REF_NAME} does not match package version ${PKG_VERSION}."
+                    exit 1
+                  fi
+
+              - name: Install pnpm
+                uses: pnpm/action-setup@v4
+
+              - name: Install dependencies
+                run: pnpm install --frozen-lockfile
+
+              - name: Build
+                run: pnpm build
+
+              - name: Publish to npm
+                run: |
+                  if [[ ${GITHUB_REF} == *alpha* ]]; then
+                    npm publish --access public --tag alpha
+                  elif [[ ${GITHUB_REF} == *beta* ]]; then
+                    npm publish --access public --tag beta
+                  else
+                    PKG_NAME=$(node -p "require('./package.json').name")
+                    PKG_VERSION=$(node -p "require('./package.json').version")
+                    CURRENT_LATEST=$(npm view "${PKG_NAME}" dist-tags.latest 2>/dev/null || echo "0.0.0")
+                    if npx -y semver@7.8.1 "${PKG_VERSION}" -r "<${CURRENT_LATEST}" > /dev/null 2>&1; then
+                      echo "Publishing ${PKG_VERSION} with --tag backport (current latest is ${CURRENT_LATEST})"
+                      npm publish --access public --tag backport
+                    else
+                      npm publish --access public
+                    fi
+                  fi

@@ -13,8 +13,8 @@ export interface Run {
     status: Decisions.RunStatus;
     /** When the run started. */
     startedAt: Date;
-    /** When the run ended. Null while it is in progress. */
-    endedAt: Date | null;
+    /** When the run ended. */
+    endedAt: Date;
     /** The size of the `file` part, in bytes. */
     bytesReceived: number;
     /** The `request` part the run evaluated: its `context` and `questions`, as sent. */
