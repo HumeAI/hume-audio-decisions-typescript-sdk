@@ -5,8 +5,8 @@ import * as core from "../../core/index.js";
 import type * as serializers from "../index.js";
 
 export const RunStatus: core.serialization.Schema<serializers.RunStatus.Raw, Decisions.RunStatus> =
-    core.serialization.enum_(["live", "ended", "errored"]);
+    core.serialization.enum_(["ended", "errored"]);
 
 export declare namespace RunStatus {
-    export type Raw = "live" | "ended" | "errored";
+    export type Raw = "ended" | "errored";
 }

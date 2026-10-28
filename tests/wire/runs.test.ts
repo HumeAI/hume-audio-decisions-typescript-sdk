@@ -14,9 +14,9 @@ describe("RunsClient", () => {
                 {
                     run_id: "019a1f52-3c47-7f80-b1d9-6a2e4c8f0d37",
                     user_id: "8d3f4a1e-6b2c-4f7d-9e0a-1b2c3d4e5f60",
-                    status: "live",
+                    status: "ended",
                     started_at: "2026-10-26T17:09:02.114Z",
-                    ended_at: null,
+                    ended_at: "2026-10-26T17:09:04.538Z",
                     bytes_received: 2884144,
                 },
                 {
@@ -47,9 +47,9 @@ describe("RunsClient", () => {
                 {
                     runId: "019a1f52-3c47-7f80-b1d9-6a2e4c8f0d37",
                     userId: "8d3f4a1e-6b2c-4f7d-9e0a-1b2c3d4e5f60",
-                    status: "live",
+                    status: "ended",
                     startedAt: new Date("2026-10-26T17:09:02.114Z"),
-                    endedAt: null,
+                    endedAt: new Date("2026-10-26T17:09:04.538Z"),
                     bytesReceived: 2884144,
                 },
                 {
