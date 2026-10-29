@@ -26,7 +26,7 @@
  *
  * **`413 Content Too Large`**
  *
- * - `payload_too_large`: the request body, `request` and `file` parts together, is larger than 64,000,000 bytes.
+ * - `payload_too_large`: the request body, `request` and `file` parts together, is larger than 25,000,000 bytes.
  *
  * **`415 Unsupported Media Type`**
  *
