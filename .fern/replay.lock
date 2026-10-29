@@ -24,14 +24,20 @@ generations:
     cli_version: unknown
     generator_versions:
       fernapi/fern-typescript-sdk: 3.108.0
-current_generation: 177a908aeacde661d7795e67c6454b3ebef40378
+  - commit_sha: c8006a39f37ac2922531cd3cc492abd66aad1dad
+    tree_hash: 3011314346daa715cfa1272871363ac4473c5c56
+    timestamp: 2026-10-29T01:12:07.345Z
+    cli_version: unknown
+    generator_versions:
+      fernapi/fern-typescript-sdk: 3.108.0
+current_generation: c8006a39f37ac2922531cd3cc492abd66aad1dad
 patches:
   - id: patch-9b37cd53
     content_hash: sha256:7ed49a2a2b4c3a71af88da8225a66e481dcbb58b512fb16b3427f1d69cddbae5
     original_commit: 9b37cd531065801be38abacda2412f6236d9e1bc
     original_message: Publish only from version tags that match the package version, using trusted publishing through a registry environment
     original_author: zach <zachary.greathouse@hume.ai>
-    base_generation: 177a908aeacde661d7795e67c6454b3ebef40378
+    base_generation: c8006a39f37ac2922531cd3cc492abd66aad1dad
     files:
       - .github/workflows/ci.yml
     patch_content: |+
