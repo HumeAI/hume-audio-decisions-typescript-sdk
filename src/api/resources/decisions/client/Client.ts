@@ -58,14 +58,13 @@ export class DecisionsClient {
      * 1. Each probability estimates the share of human raters who would give that answer. A `noul` answer near 0.5 means raters would split on the audio, not that the model is unsure.
      * 2. `confidence` measures how much raters would agree, not how certain the model is.
      *
-     * @param {Decisions.DecisionsCreateRequest} request
+     * @param {Decisions.DecisionsUpload} request
      * @param {DecisionsClient.RequestOptions} requestOptions - Request-specific configuration.
      *
      * @throws {@link Decisions.BadRequestError}
      * @throws {@link Decisions.UnauthorizedError}
      * @throws {@link Decisions.PaymentRequiredError}
      * @throws {@link Decisions.ForbiddenError}
-     * @throws {@link Decisions.MethodNotAllowedError}
      * @throws {@link Decisions.ContentTooLargeError}
      * @throws {@link Decisions.UnsupportedMediaTypeError}
      * @throws {@link Decisions.TooManyRequestsError}
@@ -190,14 +189,14 @@ export class DecisionsClient {
      *     })
      */
     public create(
-        request: Decisions.DecisionsCreateRequest,
+        request: Decisions.DecisionsUpload,
         requestOptions?: DecisionsClient.RequestOptions,
     ): core.HttpResponsePromise<Decisions.DecisionsResponse> {
         return core.HttpResponsePromise.fromPromise(this.__create(request, requestOptions));
     }
 
     private async __create(
-        request: Decisions.DecisionsCreateRequest,
+        request: Decisions.DecisionsUpload,
         requestOptions?: DecisionsClient.RequestOptions,
     ): Promise<core.WithRawResponse<Decisions.DecisionsResponse>> {
         const _body = await core.newFormData();
@@ -263,7 +262,7 @@ export class DecisionsClient {
                     );
                 case 401:
                     throw new Decisions.UnauthorizedError(
-                        serializers.AuthenticationError.parseOrThrow(_response.error.body, {
+                        serializers.GatewayError.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
                             allowUnrecognizedEnumValues: true,
@@ -285,17 +284,6 @@ export class DecisionsClient {
                     );
                 case 403:
                     throw new Decisions.ForbiddenError(
-                        serializers.Error_.parseOrThrow(_response.error.body, {
-                            unrecognizedObjectKeys: "passthrough",
-                            allowUnrecognizedUnionMembers: true,
-                            allowUnrecognizedEnumValues: true,
-                            skipValidation: true,
-                            breadcrumbsPrefix: ["response"],
-                        }),
-                        _response.rawResponse,
-                    );
-                case 405:
-                    throw new Decisions.MethodNotAllowedError(
                         serializers.Error_.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -329,7 +317,7 @@ export class DecisionsClient {
                     );
                 case 429:
                     throw new Decisions.TooManyRequestsError(
-                        serializers.Error_.parseOrThrow(_response.error.body, {
+                        serializers.GatewayError.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
                             allowUnrecognizedEnumValues: true,
@@ -370,242 +358,5 @@ export class DecisionsClient {
         }
 
         return handleNonStatusCodeError(_response.error, _response.rawResponse, "POST", "/v0/decisions/file");
-    }
-
-    /**
-     * Counts the input tokens a decisions request would be billed for, without evaluating the audio or recording a run. Send the same body you would send to `POST /v0/decisions/file`.
-     *
-     * The request is validated the same way as a decisions request, and fails with the same errors. The response has no `run_id`, because no run is recorded.
-     *
-     * Hume counts the input tokens from the audio duration, the context and the questions.
-     *
-     * @param {Decisions.DecisionsInputTokensRequest} request
-     * @param {DecisionsClient.RequestOptions} requestOptions - Request-specific configuration.
-     *
-     * @throws {@link Decisions.BadRequestError}
-     * @throws {@link Decisions.UnauthorizedError}
-     * @throws {@link Decisions.PaymentRequiredError}
-     * @throws {@link Decisions.ForbiddenError}
-     * @throws {@link Decisions.MethodNotAllowedError}
-     * @throws {@link Decisions.ContentTooLargeError}
-     * @throws {@link Decisions.UnsupportedMediaTypeError}
-     * @throws {@link Decisions.TooManyRequestsError}
-     * @throws {@link Decisions.InternalServerError}
-     * @throws {@link errors.DecisionsError}
-     * @throws {@link errors.DecisionsTimeoutError}
-     *
-     * @example
-     *     import { createReadStream } from "fs";
-     *     await client.decisions.inputTokens({
-     *         file: fs.createReadStream("/path/to/your/file"),
-     *         request: {
-     *             context: "A simulated test call in which a voice AI agent helps a caller reschedule an appointment. Both voices are synthetic, and the agent speaks first.",
-     *             questions: {
-     *                 "talks_over_caller": {
-     *                     type: "noul",
-     *                     instructions: "Does the agent talk over the caller?"
-     *                 },
-     *                 "agent_tone": {
-     *                     type: "choice",
-     *                     instructions: "Which best describes the tone of the agent?",
-     *                     criteria: [{
-     *                             name: "warm",
-     *                             description: "Warm and friendly toward the caller"
-     *                         }, {
-     *                             name: "neutral",
-     *                             description: "Polite but impersonal"
-     *                         }, {
-     *                             name: "curt",
-     *                             description: "Short or dismissive with the caller"
-     *                         }]
-     *                 },
-     *                 "agent_naturalness": {
-     *                     type: "score",
-     *                     instructions: "How natural does the agent sound?",
-     *                     criteria: ["Not at all", "2", "3", "4", "Extremely"]
-     *                 },
-     *                 "agent_glitches": {
-     *                     type: "moment",
-     *                     instructions: "Where does the agent glitch, slur or sound robotic?"
-     *                 }
-     *             }
-     *         }
-     *     })
-     */
-    public inputTokens(
-        request: Decisions.DecisionsInputTokensRequest,
-        requestOptions?: DecisionsClient.RequestOptions,
-    ): core.HttpResponsePromise<Decisions.InputTokensResponse> {
-        return core.HttpResponsePromise.fromPromise(this.__inputTokens(request, requestOptions));
-    }
-
-    private async __inputTokens(
-        request: Decisions.DecisionsInputTokensRequest,
-        requestOptions?: DecisionsClient.RequestOptions,
-    ): Promise<core.WithRawResponse<Decisions.InputTokensResponse>> {
-        const _body = await core.newFormData();
-        _body.append(
-            "request",
-            toJson(
-                DecisionsRequest.jsonOrThrow(request.request, { unrecognizedObjectKeys: "strip", omitUndefined: true }),
-            ),
-        );
-        await _body.appendFile("file", request.file);
-        const _maybeEncodedRequest = await _body.getRequest();
-        const _authRequest: core.AuthRequest = await this._options.authProvider.getAuthRequest();
-        const _headers: core.Fetcher.Args["headers"] = mergeHeaders(
-            _authRequest.headers,
-            this._options?.headers,
-            mergeOnlyDefinedHeaders({ ..._maybeEncodedRequest.headers }),
-            requestOptions?.headers,
-        );
-        const _response = await core.fetcher({
-            url: core.url.join(
-                (await core.Supplier.get(this._options.baseUrl)) ??
-                    (await core.Supplier.get(this._options.environment)) ??
-                    environments.DecisionsEnvironment.Production,
-                "v0/decisions/file/input_tokens",
-            ),
-            method: "POST",
-            headers: _headers,
-            queryString: core.url.queryBuilder().mergeAdditional(requestOptions?.queryParams).build(),
-            requestType: "file",
-            duplex: _maybeEncodedRequest.duplex,
-            body: _maybeEncodedRequest.body,
-            timeoutMs: (requestOptions?.timeoutInSeconds ?? this._options?.timeoutInSeconds ?? 60) * 1000,
-            maxRetries: requestOptions?.maxRetries ?? this._options?.maxRetries,
-            abortSignal: requestOptions?.abortSignal,
-            fetchFn: this._options?.fetch,
-            logging: this._options.logging,
-        });
-        if (_response.ok) {
-            return {
-                data: serializers.InputTokensResponse.parseOrThrow(_response.body, {
-                    unrecognizedObjectKeys: "passthrough",
-                    allowUnrecognizedUnionMembers: true,
-                    allowUnrecognizedEnumValues: true,
-                    skipValidation: true,
-                    breadcrumbsPrefix: ["response"],
-                }),
-                rawResponse: _response.rawResponse,
-            };
-        }
-
-        if (_response.error.reason === "status-code") {
-            switch (_response.error.statusCode) {
-                case 400:
-                    throw new Decisions.BadRequestError(
-                        serializers.Error_.parseOrThrow(_response.error.body, {
-                            unrecognizedObjectKeys: "passthrough",
-                            allowUnrecognizedUnionMembers: true,
-                            allowUnrecognizedEnumValues: true,
-                            skipValidation: true,
-                            breadcrumbsPrefix: ["response"],
-                        }),
-                        _response.rawResponse,
-                    );
-                case 401:
-                    throw new Decisions.UnauthorizedError(
-                        serializers.AuthenticationError.parseOrThrow(_response.error.body, {
-                            unrecognizedObjectKeys: "passthrough",
-                            allowUnrecognizedUnionMembers: true,
-                            allowUnrecognizedEnumValues: true,
-                            skipValidation: true,
-                            breadcrumbsPrefix: ["response"],
-                        }),
-                        _response.rawResponse,
-                    );
-                case 402:
-                    throw new Decisions.PaymentRequiredError(
-                        serializers.Error_.parseOrThrow(_response.error.body, {
-                            unrecognizedObjectKeys: "passthrough",
-                            allowUnrecognizedUnionMembers: true,
-                            allowUnrecognizedEnumValues: true,
-                            skipValidation: true,
-                            breadcrumbsPrefix: ["response"],
-                        }),
-                        _response.rawResponse,
-                    );
-                case 403:
-                    throw new Decisions.ForbiddenError(
-                        serializers.Error_.parseOrThrow(_response.error.body, {
-                            unrecognizedObjectKeys: "passthrough",
-                            allowUnrecognizedUnionMembers: true,
-                            allowUnrecognizedEnumValues: true,
-                            skipValidation: true,
-                            breadcrumbsPrefix: ["response"],
-                        }),
-                        _response.rawResponse,
-                    );
-                case 405:
-                    throw new Decisions.MethodNotAllowedError(
-                        serializers.Error_.parseOrThrow(_response.error.body, {
-                            unrecognizedObjectKeys: "passthrough",
-                            allowUnrecognizedUnionMembers: true,
-                            allowUnrecognizedEnumValues: true,
-                            skipValidation: true,
-                            breadcrumbsPrefix: ["response"],
-                        }),
-                        _response.rawResponse,
-                    );
-                case 413:
-                    throw new Decisions.ContentTooLargeError(
-                        serializers.Error_.parseOrThrow(_response.error.body, {
-                            unrecognizedObjectKeys: "passthrough",
-                            allowUnrecognizedUnionMembers: true,
-                            allowUnrecognizedEnumValues: true,
-                            skipValidation: true,
-                            breadcrumbsPrefix: ["response"],
-                        }),
-                        _response.rawResponse,
-                    );
-                case 415:
-                    throw new Decisions.UnsupportedMediaTypeError(
-                        serializers.Error_.parseOrThrow(_response.error.body, {
-                            unrecognizedObjectKeys: "passthrough",
-                            allowUnrecognizedUnionMembers: true,
-                            allowUnrecognizedEnumValues: true,
-                            skipValidation: true,
-                            breadcrumbsPrefix: ["response"],
-                        }),
-                        _response.rawResponse,
-                    );
-                case 429:
-                    throw new Decisions.TooManyRequestsError(
-                        serializers.Error_.parseOrThrow(_response.error.body, {
-                            unrecognizedObjectKeys: "passthrough",
-                            allowUnrecognizedUnionMembers: true,
-                            allowUnrecognizedEnumValues: true,
-                            skipValidation: true,
-                            breadcrumbsPrefix: ["response"],
-                        }),
-                        _response.rawResponse,
-                    );
-                case 500:
-                    throw new Decisions.InternalServerError(
-                        serializers.Error_.parseOrThrow(_response.error.body, {
-                            unrecognizedObjectKeys: "passthrough",
-                            allowUnrecognizedUnionMembers: true,
-                            allowUnrecognizedEnumValues: true,
-                            skipValidation: true,
-                            breadcrumbsPrefix: ["response"],
-                        }),
-                        _response.rawResponse,
-                    );
-                default:
-                    throw new errors.DecisionsError({
-                        statusCode: _response.error.statusCode,
-                        body: _response.error.body,
-                        rawResponse: _response.rawResponse,
-                    });
-            }
-        }
-
-        return handleNonStatusCodeError(
-            _response.error,
-            _response.rawResponse,
-            "POST",
-            "/v0/decisions/file/input_tokens",
-        );
     }
 }

@@ -14,31 +14,23 @@
  *
  * **`402 Payment Required`**
  *
- * - `payment_required`: the account has no available balance.
+ * - `payment_required`: the organization has no payment method on file, or has an unpaid invoice.
  *
  * **`403 Forbidden`**
  *
- * - `forbidden`: the credential does not grant access to this API.
+ * - `forbidden`: the credential does not grant access to this API, or the organization is not permitted to use it.
  *
  * **`404 Not Found`**
  *
- * - `not_found`: no run with this ID exists in your organization, or the path does not exist.
- *
- * **`405 Method Not Allowed`**
- *
- * - `method_not_allowed`: the endpoint does not accept this HTTP method. The `Allow` header lists the methods it does accept.
+ * - `not_found`: no run with this ID exists in your organization.
  *
  * **`413 Content Too Large`**
  *
- * - `payload_too_large`: the request body or the audio file exceeds the size limit.
+ * - `payload_too_large`: the request body, `request` and `file` parts together, is larger than 64,000,000 bytes.
  *
  * **`415 Unsupported Media Type`**
  *
  * - `unsupported_media_type`: the request body is not `multipart/form-data`.
- *
- * **`429 Too Many Requests`**
- *
- * - `rate_limited`: the request exceeds a rate limit for the account. Retry after the number of seconds in the `Retry-After` header.
  *
  * **`500 Internal Server Error`**
  *
@@ -46,7 +38,7 @@
  *
  * **`503 Service Unavailable`**
  *
- * - `server_busy`: the service is at capacity. Retry after the number of seconds in the `Retry-After` header. Not returned by the input tokens endpoint.
+ * - `server_busy`: the service is at capacity. Retry after the number of seconds in the `Retry-After` header.
  */
 export const ErrorCode = {
     MessageInvalid: "message_invalid",
@@ -58,10 +50,8 @@ export const ErrorCode = {
     PaymentRequired: "payment_required",
     Forbidden: "forbidden",
     NotFound: "not_found",
-    MethodNotAllowed: "method_not_allowed",
     PayloadTooLarge: "payload_too_large",
     UnsupportedMediaType: "unsupported_media_type",
-    RateLimited: "rate_limited",
     InternalError: "internal_error",
     ServerBusy: "server_busy",
 } as const;

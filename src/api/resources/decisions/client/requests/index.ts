@@ -1,2 +1,1 @@
-export type { DecisionsCreateRequest } from "./DecisionsCreateRequest.js";
-export type { DecisionsInputTokensRequest } from "./DecisionsInputTokensRequest.js";
+export type { DecisionsUpload } from "./DecisionsUpload.js";

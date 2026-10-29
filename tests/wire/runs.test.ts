@@ -126,30 +126,7 @@ describe("RunsClient", () => {
         const server = mockServerPool.createServer();
         const client = new DecisionsClient({ maxRetries: 0, apiKey: "test", environment: server.baseUrl });
 
-        const rawResponseBody = {
-            type: "error",
-            code: "message_invalid",
-            message: "message",
-            request_id: "request_id",
-        };
-
-        server.mockEndpoint().get("/v0/decisions/run").respondWith().statusCode(405).jsonBody(rawResponseBody).build();
-
-        await expect(async () => {
-            return await client.runs.list();
-        }).rejects.toThrow(Decisions.MethodNotAllowedError);
-    });
-
-    test("list (6)", async () => {
-        const server = mockServerPool.createServer();
-        const client = new DecisionsClient({ maxRetries: 0, apiKey: "test", environment: server.baseUrl });
-
-        const rawResponseBody = {
-            type: "error",
-            code: "message_invalid",
-            message: "message",
-            request_id: "request_id",
-        };
+        const rawResponseBody = { message: "message" };
 
         server.mockEndpoint().get("/v0/decisions/run").respondWith().statusCode(429).jsonBody(rawResponseBody).build();
 
@@ -158,7 +135,7 @@ describe("RunsClient", () => {
         }).rejects.toThrow(Decisions.TooManyRequestsError);
     });
 
-    test("list (7)", async () => {
+    test("list (6)", async () => {
         const server = mockServerPool.createServer();
         const client = new DecisionsClient({ maxRetries: 0, apiKey: "test", environment: server.baseUrl });
 
@@ -176,7 +153,7 @@ describe("RunsClient", () => {
         }).rejects.toThrow(Decisions.InternalServerError);
     });
 
-    test("list (8)", async () => {
+    test("list (7)", async () => {
         const server = mockServerPool.createServer();
         const client = new DecisionsClient({ maxRetries: 0, apiKey: "test", environment: server.baseUrl });
 
@@ -367,38 +344,7 @@ describe("RunsClient", () => {
         const server = mockServerPool.createServer();
         const client = new DecisionsClient({ maxRetries: 0, apiKey: "test", environment: server.baseUrl });
 
-        const rawResponseBody = {
-            type: "error",
-            code: "message_invalid",
-            message: "message",
-            request_id: "request_id",
-        };
-
-        server
-            .mockEndpoint()
-            .get("/v0/decisions/run/run_id")
-            .respondWith()
-            .statusCode(405)
-            .jsonBody(rawResponseBody)
-            .build();
-
-        await expect(async () => {
-            return await client.runs.get({
-                runId: "run_id",
-            });
-        }).rejects.toThrow(Decisions.MethodNotAllowedError);
-    });
-
-    test("get (6)", async () => {
-        const server = mockServerPool.createServer();
-        const client = new DecisionsClient({ maxRetries: 0, apiKey: "test", environment: server.baseUrl });
-
-        const rawResponseBody = {
-            type: "error",
-            code: "message_invalid",
-            message: "message",
-            request_id: "request_id",
-        };
+        const rawResponseBody = { message: "message" };
 
         server
             .mockEndpoint()
@@ -415,7 +361,7 @@ describe("RunsClient", () => {
         }).rejects.toThrow(Decisions.TooManyRequestsError);
     });
 
-    test("get (7)", async () => {
+    test("get (6)", async () => {
         const server = mockServerPool.createServer();
         const client = new DecisionsClient({ maxRetries: 0, apiKey: "test", environment: server.baseUrl });
 
@@ -441,7 +387,7 @@ describe("RunsClient", () => {
         }).rejects.toThrow(Decisions.InternalServerError);
     });
 
-    test("get (8)", async () => {
+    test("get (7)", async () => {
         const server = mockServerPool.createServer();
         const client = new DecisionsClient({ maxRetries: 0, apiKey: "test", environment: server.baseUrl });
 

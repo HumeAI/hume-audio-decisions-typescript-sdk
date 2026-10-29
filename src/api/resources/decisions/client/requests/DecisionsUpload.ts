@@ -114,7 +114,7 @@ import type * as Decisions from "../../../../index.js";
  *         }
  *     }
  */
-export interface DecisionsCreateRequest {
+export interface DecisionsUpload {
     request: Decisions.DecisionsRequest;
     /** The audio file, MP3 or WAV, in a part named `file`. */
     file: core.file.Uploadable;
