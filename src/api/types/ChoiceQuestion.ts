@@ -8,6 +8,6 @@ import type * as Decisions from "../index.js";
 export interface ChoiceQuestion {
     /** The question, written in natural language. */
     instructions: string;
-    /** The options, presented to the model in the order listed. A question with fewer than two options, or with duplicate names, is rejected with `question_invalid`. */
+    /** The options, presented to the model in the order listed. A question with fewer than two options or more than 100, or with duplicate names, is rejected with `question_invalid`. */
     criteria: Decisions.Criterion[];
 }

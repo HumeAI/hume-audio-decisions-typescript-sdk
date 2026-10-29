@@ -15,10 +15,8 @@ export const ErrorCode: core.serialization.Schema<serializers.ErrorCode.Raw, Dec
         "payment_required",
         "forbidden",
         "not_found",
-        "method_not_allowed",
         "payload_too_large",
         "unsupported_media_type",
-        "rate_limited",
         "internal_error",
         "server_busy",
     ]);
@@ -34,10 +32,8 @@ export declare namespace ErrorCode {
         | "payment_required"
         | "forbidden"
         | "not_found"
-        | "method_not_allowed"
         | "payload_too_large"
         | "unsupported_media_type"
-        | "rate_limited"
         | "internal_error"
         | "server_busy";
 }

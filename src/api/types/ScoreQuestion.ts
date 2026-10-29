@@ -6,6 +6,6 @@
 export interface ScoreQuestion {
     /** The question, written in natural language. */
     instructions: string;
-    /** The levels, ordered from lowest to highest and numbered from 0. The model reads each level's text, and the answer's `legend` returns it. A question with fewer than two levels, or with duplicate levels, is rejected with `question_invalid`. */
+    /** The levels, ordered from lowest to highest and numbered from 0. The model reads each level's text, and the answer's `legend` returns it. A question with fewer than two levels or more than 100, or with duplicate levels, is rejected with `question_invalid`. */
     criteria: string[];
 }

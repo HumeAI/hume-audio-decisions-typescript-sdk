@@ -5,9 +5,9 @@ import * as errors from "../../errors/index.js";
 import type * as Decisions from "../index.js";
 
 export class TooManyRequestsError extends errors.DecisionsError {
-    public declare readonly body: Decisions.Error_;
+    public declare readonly body: Decisions.GatewayError;
 
-    constructor(body: Decisions.Error_, rawResponse?: core.RawResponse) {
+    constructor(body: Decisions.GatewayError, rawResponse?: core.RawResponse) {
         super({
             message: "TooManyRequestsError",
             statusCode: 429,

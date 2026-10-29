@@ -5,9 +5,9 @@ import * as errors from "../../errors/index.js";
 import type * as Decisions from "../index.js";
 
 export class UnauthorizedError extends errors.DecisionsError {
-    public declare readonly body: Decisions.AuthenticationError;
+    public declare readonly body: Decisions.GatewayError;
 
-    constructor(body: Decisions.AuthenticationError, rawResponse?: core.RawResponse) {
+    constructor(body: Decisions.GatewayError, rawResponse?: core.RawResponse) {
         super({
             message: "UnauthorizedError",
             statusCode: 401,

@@ -37,7 +37,6 @@ export class RunsClient {
      * @throws {@link Decisions.BadRequestError}
      * @throws {@link Decisions.UnauthorizedError}
      * @throws {@link Decisions.ForbiddenError}
-     * @throws {@link Decisions.MethodNotAllowedError}
      * @throws {@link Decisions.TooManyRequestsError}
      * @throws {@link Decisions.InternalServerError}
      * @throws {@link Decisions.ServiceUnavailableError}
@@ -127,7 +126,7 @@ export class RunsClient {
                     );
                 case 401:
                     throw new Decisions.UnauthorizedError(
-                        serializers.AuthenticationError.parseOrThrow(_response.error.body, {
+                        serializers.GatewayError.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
                             allowUnrecognizedEnumValues: true,
@@ -147,20 +146,9 @@ export class RunsClient {
                         }),
                         _response.rawResponse,
                     );
-                case 405:
-                    throw new Decisions.MethodNotAllowedError(
-                        serializers.Error_.parseOrThrow(_response.error.body, {
-                            unrecognizedObjectKeys: "passthrough",
-                            allowUnrecognizedUnionMembers: true,
-                            allowUnrecognizedEnumValues: true,
-                            skipValidation: true,
-                            breadcrumbsPrefix: ["response"],
-                        }),
-                        _response.rawResponse,
-                    );
                 case 429:
                     throw new Decisions.TooManyRequestsError(
-                        serializers.Error_.parseOrThrow(_response.error.body, {
+                        serializers.GatewayError.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
                             allowUnrecognizedEnumValues: true,
@@ -212,7 +200,6 @@ export class RunsClient {
      * @throws {@link Decisions.UnauthorizedError}
      * @throws {@link Decisions.ForbiddenError}
      * @throws {@link Decisions.NotFoundError}
-     * @throws {@link Decisions.MethodNotAllowedError}
      * @throws {@link Decisions.TooManyRequestsError}
      * @throws {@link Decisions.InternalServerError}
      * @throws {@link Decisions.ServiceUnavailableError}
@@ -275,7 +262,7 @@ export class RunsClient {
             switch (_response.error.statusCode) {
                 case 401:
                     throw new Decisions.UnauthorizedError(
-                        serializers.AuthenticationError.parseOrThrow(_response.error.body, {
+                        serializers.GatewayError.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
                             allowUnrecognizedEnumValues: true,
@@ -306,20 +293,9 @@ export class RunsClient {
                         }),
                         _response.rawResponse,
                     );
-                case 405:
-                    throw new Decisions.MethodNotAllowedError(
-                        serializers.Error_.parseOrThrow(_response.error.body, {
-                            unrecognizedObjectKeys: "passthrough",
-                            allowUnrecognizedUnionMembers: true,
-                            allowUnrecognizedEnumValues: true,
-                            skipValidation: true,
-                            breadcrumbsPrefix: ["response"],
-                        }),
-                        _response.rawResponse,
-                    );
                 case 429:
                     throw new Decisions.TooManyRequestsError(
-                        serializers.Error_.parseOrThrow(_response.error.body, {
+                        serializers.GatewayError.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
                             allowUnrecognizedEnumValues: true,
