@@ -4,6 +4,7 @@ import { BadRequestError } from "../api/errors/BadRequestError.js";
 import type { DecisionsUpload } from "../api/resources/decisions/client/requests/DecisionsUpload.js";
 import type { DecisionsRequest } from "../api/types/DecisionsRequest.js";
 import type { DecisionsResponse } from "../api/types/DecisionsResponse.js";
+import { ParseError } from "../core/schemas/index.js";
 import { DecisionsError } from "../errors/DecisionsError.js";
 import { checkInteger } from "./checks.js";
 import { type iterAudioChunks, type PlannedRecording, prepareChunks } from "./chunks.js";
@@ -27,8 +28,9 @@ export class ChunkResult {
         /** The API's response for the chunk, unchanged, when the request succeeded. */
         public readonly response: DecisionsResponse | undefined,
         /**
-         * The error the request threw, when it failed. Undefined when the request succeeded or was never
-         * sent.
+         * The error the request threw, when it failed. When the response's body could not be read, a
+         * DecisionsError with no status code whose `cause` holds the parse error. Undefined when the
+         * request succeeded or was never sent.
          */
         public readonly error: DecisionsError | undefined,
     ) {}
@@ -128,11 +130,16 @@ async function* send(
                 });
             } catch (raised) {
                 // An abort ends the job rather than failing one chunk. Anything other than a
-                // DecisionsError did not come from the request, so it is not a chunk's outcome either.
-                if (!(raised instanceof DecisionsError) || signal?.aborted) {
+                // DecisionsError did not come from the request, so it is not a chunk's outcome either,
+                // except a ParseError: the generated client throws one, before it reads the status, when
+                // a response body is not the JSON object it expects, such as a proxy's HTML error page.
+                if (signal?.aborted || !(raised instanceof DecisionsError || raised instanceof ParseError)) {
                     throw raised;
                 }
-                error = raised;
+                error =
+                    raised instanceof ParseError
+                        ? new DecisionsError({ message: "The API's response could not be read.", cause: raised })
+                        : raised;
             }
         }
         const result = new ChunkResult(chunk.index, chunk.startMs, chunk.endMs, response, error);

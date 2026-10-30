@@ -282,6 +282,25 @@ describe("createChunked", () => {
         expect(result.chunks[1].error?.cause).toBeInstanceOf(TypeError);
     });
 
+    it.each<[string, () => Response]>([
+        ["an HTML error page", () => new Response("<html>413 Request Entity Too Large</html>", { status: 413 })],
+        ["an empty body", () => new Response(null, { status: 400 })],
+    ])("records a failure answered with %s on its chunk and keeps the responses before it", async (_, failure) => {
+        const sent: Sent[] = [];
+
+        const result = await decisions(sent, failingAt(2, failure)).createChunked({
+            request: REQUEST,
+            file: wav(3000),
+            maxChunkMs: 1000,
+        });
+
+        expect(sent).toHaveLength(2);
+        expect(statuses(result.chunks)).toEqual(["succeeded", "failed", "not_attempted"]);
+        expect(runIds(result)).toEqual(["run-1", undefined, undefined]);
+        expect(result.chunks[1].error).toBeInstanceOf(DecisionsError);
+        expect(result.resumeMs).toBe(1000);
+    });
+
     it("rejects with an error that did not come from a request", async () => {
         // A request the generated client cannot serialize fails before it is sent.
         const sent: Sent[] = [];
