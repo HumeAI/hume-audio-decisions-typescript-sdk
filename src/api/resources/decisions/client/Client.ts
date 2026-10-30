@@ -20,7 +20,7 @@ export declare namespace DecisionsClient {
 }
 
 /**
- * Evaluate one audio file against one or more questions, or count the input tokens a request would be billed for.
+ * Evaluate one audio file against one or more questions, or estimate the input tokens of a request.
  */
 export class DecisionsClient {
     protected readonly _options: NormalizedClientOptionsWithAuth<DecisionsClient.Options>;
@@ -337,7 +337,7 @@ export class DecisionsClient {
     }
 
     /**
-     * Counts the input tokens a decisions request would be billed for. The body takes the same `context` and `questions` as the `request` part of a `POST /v0/decisions/file` request, plus `audio_duration_ms`, the duration of the audio file in milliseconds.
+     * Estimates the input tokens of a decisions request from its questions and the duration of its audio. The body takes the same `context` and `questions` as the `request` part of a `POST /v0/decisions/file` request, plus `audio_duration_ms`, the duration of the audio file in milliseconds.
      *
      * @param {Decisions.InputTokensRequest} request
      * @param {DecisionsClient.RequestOptions} requestOptions - Request-specific configuration.
