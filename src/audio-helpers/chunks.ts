@@ -135,7 +135,7 @@ type Cut = [start: number, end: number];
  * produced, so that a file that cannot be split is rejected before any chunk is. The options are
  * checked by this call, and the file when iteration starts, so errors about the file are thrown by
  * the first `next()`. The mixdown runs on the calling thread, taking several seconds for an hour of
- * audio above 16 kHz, and lets other work run every 50 ms or so. Each chunk's `data` is a copy, made
+ * audio above 16 kHz, and pauses regularly to let other work run. Each chunk's `data` is a copy, made
  * as the chunk is produced, so keeping every chunk holds the recording in memory twice.
  *
  * Apart from the WAV mixdown `downmixStrategy` asks for, the audio is copied as it is, never decoded

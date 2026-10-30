@@ -362,7 +362,7 @@ Sending several chunks at once reaches rate limits sooner, and a failure does no
 
 ### In a browser
 
-The audio helpers import no Node.js modules, so `iterAudioChunks` can also cut a recording in a web page, for example before uploading each chunk to your server, which sends it to the API with your key. Pass the recording as a `File` or `Blob`, such as one from a file input; `{ path }` reads from the file system, which browsers do not offer. The mixdown runs on the page's main thread and lets the page handle other events about every 50 ms. The recording and its mixed-down copy are both held in the page's memory, as described under [Memory](#memory).
+The audio helpers import no Node.js modules, so `iterAudioChunks` can also cut a recording in a web page, for example before uploading each chunk to your server, which sends it to the API with your key. Pass the recording as a `File` or `Blob`, such as one from a file input; `{ path }` reads from the file system, which browsers do not offer. The mixdown runs on the page's main thread and pauses regularly to let the page handle other events. The recording and its mixed-down copy are both held in the page's memory, as described under [Memory](#memory).
 
 ## Runs
 
