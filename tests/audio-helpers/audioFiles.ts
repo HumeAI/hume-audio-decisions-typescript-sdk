@@ -98,10 +98,46 @@ export function wavFile({
     return bytes("RIFF", uint32(body.length), body);
 }
 
+/**
+ * A WAV file holding `samples`, interleaved with `channels` samples to a frame and scaled to -1 to 1.
+ */
+export function samplesWav(
+    samples: ArrayLike<number>,
+    {
+        channels,
+        sampleRate,
+        sampleWidth = 2,
+        isFloat = false,
+    }: { channels: number; sampleRate: number; sampleWidth?: number; isFloat?: boolean },
+): Uint8Array<ArrayBuffer> {
+    const data = new Uint8Array(samples.length * sampleWidth);
+    const view = new DataView(data.buffer);
+    const fullScale = 2 ** (sampleWidth * 8 - 1);
+    for (let index = 0; index < samples.length; index++) {
+        const offset = index * sampleWidth;
+        if (isFloat) {
+            if (sampleWidth === 4) {
+                view.setFloat32(offset, samples[index], true);
+            } else {
+                view.setFloat64(offset, samples[index], true);
+            }
+            continue;
+        }
+        const value = Math.min(Math.max(Math.round(samples[index] * fullScale), -fullScale), fullScale - 1);
+        // 8-bit samples are unsigned, centered on 128, and wider ones are two's complement.
+        const stored = sampleWidth === 1 ? value + 128 : value;
+        for (let byte = 0; byte < sampleWidth; byte++) {
+            data[offset + byte] = Math.floor(stored / 2 ** (8 * byte)) & 0xff;
+        }
+    }
+    return wavFile({ data, sampleRate, channels, sampleWidth, isFloat });
+}
+
 export interface WavContents {
     channels: number;
     sampleWidth: number;
     sampleRate: number;
+    isFloat: boolean;
     audio: Uint8Array;
 }
 
@@ -120,6 +156,7 @@ export function readWav(file: Uint8Array): WavContents {
                 channels: view.getUint16(offset + 10, true),
                 sampleRate: view.getUint32(offset + 12, true),
                 sampleWidth: view.getUint16(offset + 22, true) / 8,
+                isFloat: view.getUint16(offset + 8, true) === IEEE_FLOAT,
             };
         }
         if (id === "data") {
@@ -130,4 +167,29 @@ export function readWav(file: Uint8Array): WavContents {
         }
         offset += 8 + size + (size % 2);
     }
+}
+
+/** The samples of a WAV file the SDK wrote, interleaved and scaled to -1 to 1. */
+export function samplesOf({ sampleWidth, isFloat, audio }: WavContents): Float64Array {
+    const view = new DataView(audio.buffer, audio.byteOffset, audio.byteLength);
+    const samples = new Float64Array(audio.length / sampleWidth);
+    const fullScale = 2 ** (sampleWidth * 8 - 1);
+    for (let index = 0; index < samples.length; index++) {
+        const offset = index * sampleWidth;
+        if (isFloat) {
+            samples[index] = sampleWidth === 4 ? view.getFloat32(offset, true) : view.getFloat64(offset, true);
+            continue;
+        }
+        let value = 0;
+        for (let byte = sampleWidth - 1; byte >= 0; byte--) {
+            value = value * 256 + audio[offset + byte];
+        }
+        if (sampleWidth === 1) {
+            value -= 128;
+        } else if (value >= fullScale) {
+            value -= 2 * fullScale;
+        }
+        samples[index] = value / fullScale;
+    }
+    return samples;
 }

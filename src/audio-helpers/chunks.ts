@@ -1,6 +1,7 @@
 // Maintained by hand and listed in .fernignore, so SDK regeneration leaves it in place.
 
 import type { Uploadable } from "../core/file/index.js";
+import { checkDownmixStrategy, type DownmixStrategy, downmixWav } from "./downmix.js";
 import { checkFile, readFile } from "./files.js";
 import { ceilDiv, checkInteger, describe, floorDiv, roundDiv } from "./integers.js";
 import { framesNeededBefore, isMp3, type Mp3Audio, mp3Chunk, parseMp3 } from "./mp3.js";
@@ -31,7 +32,7 @@ export interface AudioChunk {
     readonly startMs: number;
     /** Where the chunk ends in the recording, in milliseconds, rounded to the nearest millisecond. */
     readonly endMs: number;
-    /** The chunk as a file in the recording's format. */
+    /** The chunk as a file in the recording's format, after any mixdown `downmixStrategy` asks for. */
     readonly data: Uint8Array;
 }
 
@@ -40,10 +41,10 @@ export declare namespace iterAudioChunks {
         /**
          * The longest a chunk can be, in milliseconds, from 1 to 300000. A WAV chunk must also be at
          * most 24,000,000 bytes, which leaves room for the rest of its request within the API's limit
-         * of 25,000,000 bytes. 5 minutes of WAV fits only at just under 80,000 bytes per second. With
-         * "even", a WAV file that does not fit is cut into shorter chunks that do. With "fixed", it
-         * throws, and 16-bit stereo needs a `maxChunkMs` of at most 136054 at 44.1 kHz and 124999 at
-         * 48 kHz.
+         * of 25,000,000 bytes. 5 minutes of WAV fits only at just under 80,000 bytes per second, and
+         * always fits for mono or stereo under "mix". With "even", a WAV file that does not fit is cut
+         * into shorter chunks that do. With "fixed", it throws, and 16-bit stereo that is not mixed
+         * down needs a `maxChunkMs` of at most 136054 at 44.1 kHz and 124999 at 48 kHz.
          */
         maxChunkMs: number;
         /** Where in the recording to start, in milliseconds. Defaults to the start of the recording. */
@@ -58,6 +59,25 @@ export declare namespace iterAudioChunks {
          * shorter last chunk. Defaults to "even".
          */
         split?: ChunkSplit;
+        /**
+         * How a WAV file is mixed down before it is cut. Audio above 16 kHz is resampled to 16 kHz
+         * with the filter the API uses, and audio at 16 kHz or below keeps its rate. Resampled audio
+         * is written as 32-bit floating point, the format the API converts every file to, so loud
+         * audio cannot clip.
+         *
+         * 1. "mix", the default, mixes two channels into one the way the API does, adding them at
+         *    -3 dB each, so the model hears the same audio as it would from the original file. A file
+         *    that this would not make smaller, such as 16-bit mono at 16 kHz, is cut as it is, and so
+         *    is audio with more than two channels, because the API weighs those channels by the
+         *    speaker positions its header declares.
+         * 2. "first_channel" keeps only the first channel of a file with more than one, so the model
+         *    hears only that channel. The channel is copied exactly in the recording's sample format
+         *    when that is no larger than resampling it, as it is at 16 kHz or below for every sample
+         *    format but 64-bit floating point. Use it when that channel holds the speaker to judge.
+         *    Mono audio is treated as by "mix".
+         * 3. "none" cuts the audio as it is.
+         */
+        downmixStrategy?: DownmixStrategy;
     }
 }
 
@@ -66,6 +86,7 @@ export interface ChunkOptions {
     readonly startMs: number;
     readonly endMs: number | undefined;
     readonly split: ChunkSplit;
+    readonly downmixStrategy: DownmixStrategy;
 }
 
 /** A chunk's place in the recording, with its data left to be copied when it is needed. */
@@ -92,18 +113,25 @@ export interface PlannedChunk {
  * No chunk is empty. Cuts fall where the format allows, as described below, so `startMs` and
  * `endMs` on each chunk give where it actually starts and ends.
  *
- * The whole recording is read into memory and checked before the first chunk is produced, so that a
- * file that cannot be split is rejected before any chunk is. The options are checked by this call,
- * and the file when iteration starts, so errors about the file are thrown by the first `next()`.
- * Each chunk's `data` is a copy, made as the chunk is produced, so keeping every chunk holds the
- * recording in memory twice.
+ * The model hears audio at 16 kHz in one channel: the API resamples and mixes down every file
+ * before the model hears it. A WAV file is mixed down the same way before it is cut, by default, so
+ * that the chunks are smaller to upload while the model hears the same audio. `downmixStrategy`
+ * describes how. MP3 files are cut as they are, because they are already compressed.
  *
- * The audio is copied as it is, never decoded or re-encoded, so cuts fall where the format allows:
+ * The whole recording is read into memory, mixed down and checked before the first chunk is
+ * produced, so that a file that cannot be split is rejected before any chunk is. The options are
+ * checked by this call, and the file when iteration starts, so errors about the file are thrown by
+ * the first `next()`. The mixdown runs on the calling thread, taking several seconds for an hour of
+ * audio above 16 kHz, and lets other work run every 50 ms or so. Each chunk's `data` is a copy, made
+ * as the chunk is produced, so keeping every chunk holds the recording in memory twice.
  *
- * 1. A WAV file is cut between samples. With "fixed", a cut can fall up to one sample before
- *    `startMs` plus a whole multiple of `maxChunkMs`, so the cuts stay on that grid. Each chunk is
- *    a new WAV file in the recording's sample format, holding only its audio; other chunks in the
- *    file, such as metadata, are left out.
+ * Apart from the WAV mixdown `downmixStrategy` asks for, the audio is copied as it is, never decoded
+ * or re-encoded, so cuts fall where the format allows:
+ *
+ * 1. A WAV file is cut between samples, after the mixdown. With "fixed", a cut can fall up to one
+ *    sample before `startMs` plus a whole multiple of `maxChunkMs`, so the cuts stay on that grid.
+ *    Each chunk is a new WAV file in the sample format of the mixed-down audio, holding only its
+ *    audio; other chunks in the file, such as metadata, are left out.
  * 2. An MP3 file is cut between frames, which last 24 to 72 ms depending on the sample rate, so
  *    chunks can differ in length by a frame, and a "fixed" chunk can be up to one frame shorter
  *    than `maxChunkMs`. `startMs` and `endMs` move to the nearest frame boundary. A frame can store
@@ -128,8 +156,9 @@ export interface PlannedChunk {
  *
  * @throws {TypeError} From this call, if `maxChunkMs`, `startMs` or `endMs` is not a safe integer, or
  * `file` is a string, which is not read as a path.
- * @throws {RangeError} From this call, if `split` is not "even" or "fixed", `maxChunkMs` is out of
- * range, or `startMs` and `endMs` do not select a range. From iteration, if `startMs` and `endMs` do
+ * @throws {RangeError} From this call, if `split` is not "even" or "fixed", `downmixStrategy` is not
+ * "mix", "first_channel" or "none", `maxChunkMs` is out of range, or `startMs` and `endMs` do not
+ * select a range. From iteration, if `startMs` and `endMs` do
  * not select audio within the recording, `maxChunkMs` is too long with "fixed" for a WAV chunk to
  * fit the API's size limit, or too short for an MP3 chunk to hold a new frame and the frames it
  * needs.
@@ -155,7 +184,7 @@ export function iterAudioChunks(
 
 async function* produceChunks(file: Uploadable, options: ChunkOptions): AsyncGenerator<AudioChunk, void, undefined> {
     const { data } = await readFile(file);
-    for (const chunk of planAudioChunks(data, options)) {
+    for (const chunk of await planAudioChunks(data, options)) {
         yield { index: chunk.index, startMs: chunk.startMs, endMs: chunk.endMs, data: chunk.build() };
     }
 }
@@ -165,10 +194,12 @@ export function checkChunkOptions({
     startMs,
     endMs,
     split = "even",
+    downmixStrategy,
 }: iterAudioChunks.Options): ChunkOptions {
     if (SPLITS.indexOf(split) < 0) {
         throw new RangeError(`split must be "even" or "fixed", got ${describe(split)}.`);
     }
+    const downmix = checkDownmixStrategy(downmixStrategy);
     checkInteger("maxChunkMs", maxChunkMs);
     if (maxChunkMs < 1 || maxChunkMs > MAX_CHUNK_MS) {
         throw new RangeError(`maxChunkMs must be between 1 and ${MAX_CHUNK_MS}, got ${maxChunkMs}.`);
@@ -183,14 +214,22 @@ export function checkChunkOptions({
             throw new RangeError(`endMs must be greater than startMs, got ${endMs}.`);
         }
     }
-    return { maxChunkMs, startMs: start, endMs, split };
+    return { maxChunkMs, startMs: start, endMs, split, downmixStrategy: downmix };
 }
 
-/** Plans the chunks `iterAudioChunks` gives, without copying any chunk's data. */
-export function planAudioChunks(data: Uint8Array, options: ChunkOptions): Iterable<PlannedChunk> {
+/**
+ * Mixes down and plans the chunks `iterAudioChunks` gives, without copying any chunk's data. Rejects
+ * with the reason of `signal` if it aborts during the mixdown.
+ */
+export async function planAudioChunks(
+    data: Uint8Array,
+    options: ChunkOptions,
+    signal?: AbortSignal,
+): Promise<Iterable<PlannedChunk>> {
     const { maxChunkMs, startMs, endMs, split } = options;
     if (isWav(data)) {
-        return wavChunks(data, parseWav(data), maxChunkMs, startMs, endMs, split);
+        const mixed = await downmixWav(data, parseWav(data), options.downmixStrategy, signal);
+        return wavChunks(mixed.data, mixed.wav, maxChunkMs, startMs, endMs, split);
     }
     if (isMp3(data)) {
         return mp3Chunks(data, parseMp3(data), maxChunkMs, startMs, endMs, split);
@@ -258,7 +297,8 @@ function checkWavSize(wav: WavAudio, maxChunkMs: number, rangeSamples: number): 
     throw new RangeError(
         `maxChunkMs must be at most ${fittingMs} for this WAV file with split="fixed", so that the request for` +
             ` each chunk fits within the API limit of ${MAX_REQUEST_BYTES.toLocaleString("en-US")} bytes.` +
-            ` split="even" cuts shorter chunks that fit instead.`,
+            ` split="even" cuts shorter chunks that fit instead, and mono or stereo audio mixed down with` +
+            ` downmixStrategy="mix" fits 5-minute chunks.`,
     );
 }
 

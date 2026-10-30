@@ -1,6 +1,6 @@
 // Maintained by hand and listed in .fernignore, so SDK regeneration leaves it in place.
 
-import { iterAudioChunks } from "../../src/audio-helpers/index";
+import { type DownmixStrategy, iterAudioChunks } from "../../src/audio-helpers/index";
 import {
     bytes,
     collect,
@@ -118,7 +118,7 @@ describe("iterAudioChunks with WAV files", () => {
         const audio = pcm(22050 * 2 * 2);
         const recording = wavFile({ sampleRate: 22050, channels: 2, sampleWidth: 2, data: audio });
 
-        const chunks = await collect(iterAudioChunks(recording, { maxChunkMs: 10 }));
+        const chunks = await collect(iterAudioChunks(recording, { maxChunkMs: 10, downmixStrategy: "none" }));
 
         expect(chunks).toHaveLength(100);
         expect(chunks.slice(0, 4).map((c) => readWav(c.data).audio.length / 4)).toEqual([220, 221, 220, 221]);
@@ -131,7 +131,7 @@ describe("iterAudioChunks with WAV files", () => {
         const audio = pcm(44122 * 2);
         const recording = wavFile({ sampleRate: 44100, channels: 1, sampleWidth: 2, data: audio });
 
-        const chunks = await collect(iterAudioChunks(recording, { maxChunkMs: 1000 }));
+        const chunks = await collect(iterAudioChunks(recording, { maxChunkMs: 1000, downmixStrategy: "none" }));
 
         expect(audioOf(chunks)).toEqual(audio);
     });
@@ -139,9 +139,13 @@ describe("iterAudioChunks with WAV files", () => {
     it("keeps the final samples when endMs is the duration the final chunk reports", async () => {
         const audio = pcm(44122 * 2);
         const recording = wavFile({ sampleRate: 44100, channels: 1, sampleWidth: 2, data: audio });
-        const durationMs = (await collect(iterAudioChunks(recording, { maxChunkMs: 1000 }))).pop()?.endMs;
+        const durationMs = (
+            await collect(iterAudioChunks(recording, { maxChunkMs: 1000, downmixStrategy: "none" }))
+        ).pop()?.endMs;
 
-        const chunks = await collect(iterAudioChunks(recording, { maxChunkMs: 1000, endMs: durationMs }));
+        const chunks = await collect(
+            iterAudioChunks(recording, { maxChunkMs: 1000, endMs: durationMs, downmixStrategy: "none" }),
+        );
 
         expect(audioOf(chunks)).toEqual(audio);
     });
@@ -191,8 +195,8 @@ describe("iterAudioChunks with WAV files", () => {
         const audio = pcm(16 * 2 * (bits / 8) * 10);
         const recording = rawWav({ tag, channels: 2, bits, data: audio, extensible });
 
-        const [chunk] = await collect(iterAudioChunks(recording, { maxChunkMs: 10 }));
-        const [rechunked] = await collect(iterAudioChunks(chunk.data, { maxChunkMs: 10 }));
+        const [chunk] = await collect(iterAudioChunks(recording, { maxChunkMs: 10, downmixStrategy: "none" }));
+        const [rechunked] = await collect(iterAudioChunks(chunk.data, { maxChunkMs: 10, downmixStrategy: "none" }));
 
         expect(rechunked.data).toEqual(chunk.data);
         expect(new DataView(chunk.data.buffer).getUint16(20, true)).toBe(extensible ? 0xfffe : tag);
@@ -290,8 +294,14 @@ describe("iterAudioChunks with WAV files", () => {
             data: new Uint8Array(70 * 384_000),
         });
 
-        const error = await iterationError(iterAudioChunks(recording, { maxChunkMs: 300_000, split: "fixed" }));
-        const { value: chunk } = await iterAudioChunks(recording, { maxChunkMs: 62499, split: "fixed" }).next();
+        const error = await iterationError(
+            iterAudioChunks(recording, { maxChunkMs: 300_000, split: "fixed", downmixStrategy: "none" }),
+        );
+        const { value: chunk } = await iterAudioChunks(recording, {
+            maxChunkMs: 62499,
+            split: "fixed",
+            downmixStrategy: "none",
+        }).next();
 
         expectError(error, RangeError, "maxChunkMs must be at most 62499 for this WAV file");
         expect(error.message).toContain("API limit of 25,000,000 bytes");
@@ -309,7 +319,7 @@ describe("iterAudioChunks with WAV files", () => {
             data: new Uint8Array(130 * 384_000),
         });
 
-        const chunks = await collect(iterAudioChunks(recording, { maxChunkMs: 300_000 }));
+        const chunks = await collect(iterAudioChunks(recording, { maxChunkMs: 300_000, downmixStrategy: "none" }));
 
         expect(times(chunks)).toEqual([
             [0, 43333],
@@ -331,7 +341,12 @@ describe("iterAudioChunks with WAV files", () => {
         });
 
         const chunks = await collect(
-            iterAudioChunks(recording, { maxChunkMs: 300_000, startMs: 10_000, split: "fixed" }),
+            iterAudioChunks(recording, {
+                maxChunkMs: 300_000,
+                startMs: 10_000,
+                split: "fixed",
+                downmixStrategy: "none",
+            }),
         );
 
         expect(times(chunks)).toEqual([[10_000, 70_000]]);
@@ -390,6 +405,22 @@ describe("iterAudioChunks with WAV files", () => {
         );
     });
 
+    it.each([
+        ["average", '"average"'],
+        [null, "null"],
+    ])("rejects a downmixStrategy of %s", (downmixStrategy, shown) => {
+        expectError(
+            thrownBy(() =>
+                iterAudioChunks(mono16k(pcm(32000)), {
+                    maxChunkMs: 1000,
+                    downmixStrategy: downmixStrategy as DownmixStrategy,
+                }),
+            ),
+            RangeError,
+            `downmixStrategy must be "mix", "first_channel" or "none", got ${shown}.`,
+        );
+    });
+
     it("splits a range into chunks timed from the start of the recording", async () => {
         const audio = pcm(5000 * 16 * 2);
 
@@ -407,7 +438,9 @@ describe("iterAudioChunks with WAV files", () => {
         const audio = pcm(22050 * 2);
         const recording = wavFile({ sampleRate: 22050, channels: 1, sampleWidth: 2, data: audio });
 
-        const chunks = await collect(iterAudioChunks(recording, { maxChunkMs: 10, startMs: 5, endMs: 45 }));
+        const chunks = await collect(
+            iterAudioChunks(recording, { maxChunkMs: 10, startMs: 5, endMs: 45, downmixStrategy: "none" }),
+        );
 
         expect(times(chunks)).toEqual([
             [5, 15],
@@ -423,10 +456,17 @@ describe("iterAudioChunks with WAV files", () => {
         // 1004 samples at 22,050 Hz last 45.533 ms, which the final chunk reports as 46 ms.
         const audio = pcm(1004 * 2);
         const recording = wavFile({ sampleRate: 22050, channels: 1, sampleWidth: 2, data: audio });
-        const durationMs = (await collect(iterAudioChunks(recording, { maxChunkMs: 1000 }))).pop()?.endMs ?? 0;
+        const durationMs =
+            (await collect(iterAudioChunks(recording, { maxChunkMs: 1000, downmixStrategy: "none" }))).pop()?.endMs ??
+            0;
 
         const chunks = await collect(
-            iterAudioChunks(recording, { maxChunkMs: 1000, startMs: durationMs - 1, endMs: durationMs }),
+            iterAudioChunks(recording, {
+                maxChunkMs: 1000,
+                startMs: durationMs - 1,
+                endMs: durationMs,
+                downmixStrategy: "none",
+            }),
         );
 
         expect(times(chunks)).toEqual([[45, 46]]);

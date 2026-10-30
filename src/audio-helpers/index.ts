@@ -3,3 +3,4 @@
 // Helpers that split audio longer than the Decisions API accepts into chunks it does accept.
 
 export { type AudioChunk, type ChunkSplit, iterAudioChunks } from "./chunks.js";
+export type { DownmixStrategy } from "./downmix.js";

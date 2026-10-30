@@ -100,6 +100,34 @@ export function parseWav(data: Uint8Array): WavAudio {
     }
 }
 
+/** Describes samples that start at offset 0 of their own buffer. */
+export function samplesWav(
+    channels: number,
+    sampleRate: number,
+    sampleWidth: number,
+    isFloat: boolean,
+    sampleCount: number,
+): WavAudio {
+    const fmt = fmtBody(
+        isFloat ? IEEE_FLOAT : PCM,
+        channels,
+        sampleRate,
+        sampleWidth,
+        sampleWidth * 8,
+        new Uint8Array(0),
+    );
+    return {
+        fmt,
+        channels,
+        sampleRate,
+        sampleWidth,
+        isFloat,
+        dataStart: 0,
+        sampleCount,
+        frameBytes: sampleWidth * channels,
+    };
+}
+
 /** Builds a WAV file holding samples `start` to `end` and none of the source's other chunks. */
 export function wavChunk(data: Uint8Array, audio: WavAudio, start: number, end: number): Uint8Array {
     const first = audio.dataStart + start * audio.frameBytes;
