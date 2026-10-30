@@ -74,7 +74,7 @@ The following directories contain generated code:
 
 Some of the SDK is written by hand rather than generated:
 
-1. `README.md` and this file, which are listed in `.fernignore`.
+1. `README.md`, `LICENSE` and this file, which are listed in `.fernignore`.
 2. The publish job in `.github/workflows/ci.yml`, a change to a generated file.
 
 Regeneration rewrites the generated files. Fern Replay applies the committed changes to them again and records them in `.fern/replay.lock`, but check each regeneration for them. Nothing fails if the publish job is lost.
