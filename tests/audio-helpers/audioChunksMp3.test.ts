@@ -1,15 +1,11 @@
 // Maintained by hand and listed in .fernignore, so SDK regeneration leaves it in place.
 
-import { readFileSync } from "fs";
-import { join } from "path";
 import { type AudioChunk, type ChunkSplit, iterAudioChunks } from "../../src/audio-helpers/index";
-import { bytes, collect, expectError, iterationError } from "./audioFiles";
+import { asset, bytes, collect, expectBytes, expectError, iterationError, times } from "./audioFiles";
 
 const MPEG1 = 3;
 const MPEG2 = 2;
 const MPEG25 = 0;
-
-const ASSETS = join(__dirname, "assets");
 
 interface FrameOptions {
     version?: number;
@@ -107,10 +103,6 @@ function concatFrames(parts: Uint8Array[]): Uint8Array {
     return bytes(...parts);
 }
 
-function times(chunks: AudioChunk[]): [number, number][] {
-    return chunks.map((chunk) => [chunk.startMs, chunk.endMs]);
-}
-
 function withIndexes(chunks: AudioChunk[], shift: number): AudioChunk[] {
     return chunks.map((chunk) => ({ ...chunk, index: chunk.index + shift }));
 }
@@ -167,7 +159,10 @@ describe("iterAudioChunks with MP3 files", () => {
 
         const chunks = await collect(iterAudioChunks(concatFrames(all), { maxChunkMs: 300_000 }));
 
-        expect(chunks.map((c) => c.data)).toEqual([concatFrames(all.slice(0, 11484)), concatFrames(all.slice(11483))]);
+        expectBytes(
+            chunks.map((c) => c.data),
+            [concatFrames(all.slice(0, 11484)), concatFrames(all.slice(11483))],
+        );
         expect(chunks[0].endMs).toBe(299_990);
     });
 
@@ -566,7 +561,7 @@ describe("iterAudioChunks with MP3 files", () => {
         // With fewer frames repeated, the times change and the decoded audio does not match.
         // Times are measured from where ffmpeg and mpg123 start playing the whole file, which both play
         // for 4000 ms, so a chunk's start plus a time within the decoded chunk gives that sample.
-        const recording = new Uint8Array(readFileSync(join(ASSETS, name)));
+        const recording = asset(name);
 
         const chunks = await collect(iterAudioChunks(recording, { maxChunkMs: 1000, split }));
 

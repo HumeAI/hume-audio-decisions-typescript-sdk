@@ -9,6 +9,7 @@ import {
     pcm,
     readWav,
     thrownBy,
+    times,
     uint16,
     uint32,
     wavFile,
@@ -76,10 +77,6 @@ function mono16k(data: Uint8Array): Uint8Array {
 
 function audioOf(chunks: { data: Uint8Array }[]): Uint8Array {
     return bytes(...chunks.map((chunk) => readWav(chunk.data).audio));
-}
-
-function times(chunks: { startMs: number; endMs: number }[]): [number, number][] {
-    return chunks.map((chunk) => [chunk.startMs, chunk.endMs]);
 }
 
 describe("iterAudioChunks with WAV files", () => {
@@ -196,7 +193,7 @@ describe("iterAudioChunks with WAV files", () => {
         const [rechunked] = await collect(iterAudioChunks(chunk.data, { maxChunkMs: 10, downmixStrategy: "none" }));
 
         expect(rechunked.data).toEqual(chunk.data);
-        expect(new DataView(chunk.data.buffer).getUint16(20, true)).toBe(extensible ? 0xfffe : tag);
+        expect(readWav(chunk.data).formatTag).toBe(extensible ? 0xfffe : tag);
         expect(chunk.data.slice(chunk.data.length - audio.length)).toEqual(audio);
     });
 
@@ -206,9 +203,9 @@ describe("iterAudioChunks with WAV files", () => {
 
         const [chunk] = await collect(iterAudioChunks(recording, { maxChunkMs: 10 }));
 
-        const view = new DataView(chunk.data.buffer);
-        expect([view.getUint32(28, true), view.getUint16(32, true)]).toEqual([32000, 2]);
-        expect(readWav(chunk.data).audio).toEqual(audio);
+        const { byteRate, blockAlign, audio: written } = readWav(chunk.data);
+        expect([byteRate, blockAlign]).toEqual([32000, 2]);
+        expect(written).toEqual(audio);
     });
 
     it("reads data of unknown size to the end of the recording", async () => {

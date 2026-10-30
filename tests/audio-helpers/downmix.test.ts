@@ -1,10 +1,8 @@
 // Maintained by hand and listed in .fernignore, so SDK regeneration leaves it in place.
 
 import { spawnSync } from "child_process";
-import { readFileSync } from "fs";
-import { join } from "path";
 import { type DownmixStrategy, iterAudioChunks } from "../../src/audio-helpers/index";
-import { collect, readWav, samplesOf, samplesWav, type WavContents } from "./audioFiles";
+import { asset, collect, readWav, samplesOf, samplesWav, type WavContents } from "./audioFiles";
 
 const FORMATS: [number, boolean][] = [
     [1, false],
@@ -102,7 +100,7 @@ describe("iterAudioChunks mixdown", () => {
     });
 
     it("cuts an MP3 file as it is, whatever the downmix strategy", async () => {
-        const recording = new Uint8Array(readFileSync(join(__dirname, "assets", "tone_mpeg1_32k.mp3")));
+        const recording = asset("tone_mpeg1_32k.mp3");
 
         const mixed = await collect(iterAudioChunks(recording, { maxChunkMs: 1000 }));
 

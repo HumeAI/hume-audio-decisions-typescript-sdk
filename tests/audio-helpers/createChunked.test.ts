@@ -1,7 +1,5 @@
 // Maintained by hand and listed in .fernignore, so SDK regeneration leaves it in place.
 
-import { readFileSync } from "fs";
-import { join } from "path";
 import * as Decisions from "../../src/api/index";
 import {
     ChunkedDecisionsResult,
@@ -11,9 +9,19 @@ import {
 } from "../../src/audio-helpers/index";
 import { DecisionsClient } from "../../src/Client";
 import { DecisionsError } from "../../src/errors/index";
-import { collect, expectError, iterationError, pcm, samplesWav, thrownBy, wavFile } from "./audioFiles";
-
-const ASSETS = join(__dirname, "assets");
+import {
+    asset,
+    collect,
+    expectBytes,
+    expectError,
+    iterationError,
+    pcm,
+    rejection,
+    samplesWav,
+    thrownBy,
+    times,
+    wavFile,
+} from "./audioFiles";
 
 const REQUEST: Decisions.DecisionsRequest = {
     context: "A test call.",
@@ -30,10 +38,6 @@ type Respond = (number: number) => Response;
 
 function wav(milliseconds: number, { sampleRate = 8000, channels = 1 } = {}): Uint8Array<ArrayBuffer> {
     return wavFile({ data: pcm(((sampleRate * milliseconds) / 1000) * 2 * channels), sampleRate, channels });
-}
-
-function asset(name: string): Uint8Array<ArrayBuffer> {
-    return new Uint8Array(readFileSync(join(ASSETS, name)));
 }
 
 function json(status: number, body: unknown): Response {
@@ -86,30 +90,12 @@ async function uploaded(
     return fileBytes(sent[0]);
 }
 
-/** Compares bytes with Buffer.compare, because toEqual compares a recording slowly, one byte at a time. */
-function expectBytes(actual: readonly Uint8Array[], expected: readonly Uint8Array[]): void {
-    expect(actual.map((bytes, index) => Buffer.compare(bytes, expected[index]))).toEqual(expected.map(() => 0));
-}
-
-function times(chunks: readonly ChunkResult[]): [number, number][] {
-    return chunks.map((chunk) => [chunk.startMs, chunk.endMs]);
-}
-
 function statuses(chunks: readonly ChunkResult[]): string[] {
     return chunks.map((chunk) => chunk.status);
 }
 
 function runIds(result: ChunkedDecisionsResult): (string | undefined)[] {
     return result.responses.map((response) => response?.runId);
-}
-
-async function rejection(promise: Promise<unknown>): Promise<Error> {
-    try {
-        await promise;
-    } catch (error) {
-        return error as Error;
-    }
-    throw new Error("The promise did not reject.");
 }
 
 /** Checks for the error the generated client throws when a request is aborted. */

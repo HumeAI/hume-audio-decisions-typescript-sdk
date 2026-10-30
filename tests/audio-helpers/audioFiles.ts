@@ -1,5 +1,8 @@
 // Maintained by hand and listed in .fernignore, so SDK regeneration leaves it in place.
 
+import { readFileSync } from "fs";
+import { join } from "path";
+
 const PCM = 0x0001;
 const IEEE_FLOAT = 0x0003;
 
@@ -21,6 +24,16 @@ export async function iterationError(items: AsyncIterable<unknown>): Promise<Err
     throw new Error("Iteration did not throw.");
 }
 
+/** The error that `promise` rejects with. */
+export async function rejection(promise: Promise<unknown>): Promise<Error> {
+    try {
+        await promise;
+    } catch (error) {
+        return error as Error;
+    }
+    throw new Error("The promise did not reject.");
+}
+
 /** The error that `action` throws. */
 export function thrownBy(action: () => unknown): Error {
     try {
@@ -35,6 +48,20 @@ export function thrownBy(action: () => unknown): Error {
 export function expectError(error: Error, type: new (message: string) => Error, message: string): void {
     expect(error.constructor).toBe(type);
     expect(error.message).toContain(message);
+}
+
+/** Compares bytes with Buffer.compare, because toEqual compares a recording slowly, one byte at a time. */
+export function expectBytes(actual: readonly Uint8Array[], expected: readonly Uint8Array[]): void {
+    expect(actual.map((bytes, index) => Buffer.compare(bytes, expected[index]))).toEqual(expected.map(() => 0));
+}
+
+export function times(chunks: readonly { startMs: number; endMs: number }[]): [number, number][] {
+    return chunks.map((chunk) => [chunk.startMs, chunk.endMs]);
+}
+
+/** A recording from the assets directory, in a buffer of its own. */
+export function asset(name: string): Uint8Array<ArrayBuffer> {
+    return new Uint8Array(readFileSync(join(__dirname, "assets", name)));
 }
 
 export function bytes(...parts: (Uint8Array | string | number[])[]): Uint8Array<ArrayBuffer> {
@@ -134,10 +161,13 @@ export function samplesWav(
 }
 
 export interface WavContents {
+    formatTag: number;
     channels: number;
     sampleWidth: number;
     sampleRate: number;
     isFloat: boolean;
+    byteRate: number;
+    blockAlign: number;
     audio: Uint8Array;
 }
 
@@ -152,11 +182,15 @@ export function readWav(file: Uint8Array): WavContents {
         const id = String.fromCharCode(...file.subarray(offset, offset + 4));
         const size = view.getUint32(offset + 4, true);
         if (id === "fmt ") {
+            const formatTag = view.getUint16(offset + 8, true);
             format = {
+                formatTag,
                 channels: view.getUint16(offset + 10, true),
                 sampleRate: view.getUint32(offset + 12, true),
+                byteRate: view.getUint32(offset + 16, true),
+                blockAlign: view.getUint16(offset + 20, true),
                 sampleWidth: view.getUint16(offset + 22, true) / 8,
-                isFloat: view.getUint16(offset + 8, true) === IEEE_FLOAT,
+                isFloat: formatTag === IEEE_FLOAT,
             };
         }
         if (id === "data") {
