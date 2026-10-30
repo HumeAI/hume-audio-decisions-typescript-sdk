@@ -111,6 +111,6 @@
         "node": ">=18.0.0"
     },
     "sideEffects": false,
-    "description": "A TypeScript SDK for the Hume Decisions API",
+    "description": "A TypeScript SDK for the Hume Audio Decisions API",
     "homepage": "https://dev.hume.ai/decisions/docs/overview"
 }
