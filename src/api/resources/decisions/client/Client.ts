@@ -337,11 +337,7 @@ export class DecisionsClient {
     }
 
     /**
-     * Counts the input tokens a decisions request would be billed for, without uploading or evaluating its audio. Send the `request` part of the decisions request as a JSON body, with `audio_duration_ms` for the audio file it would send. No run is recorded, so the response has no `run_id`.
-     *
-     * The context and questions are validated as a decisions request's are, and fail with the same errors. The audio itself is not checked, so a request counted here can still be rejected by `POST /v0/decisions/file` for its audio file.
-     *
-     * Hume counts input tokens from the audio duration, the context, and each question's text, options and type.
+     * Counts the input tokens a decisions request would be billed for. The body takes the same `context` and `questions` as the `request` part of a `POST /v0/decisions/file` request, plus `audio_duration_ms`, the duration of the audio file in milliseconds.
      *
      * @param {Decisions.InputTokensRequest} request
      * @param {DecisionsClient.RequestOptions} requestOptions - Request-specific configuration.
@@ -357,11 +353,35 @@ export class DecisionsClient {
      *
      * @example
      *     await client.decisions.inputTokens({
-     *         audioDurationMs: 1,
+     *         audioDurationMs: 135000,
+     *         context: "A simulated test call in which a voice AI agent helps a caller reschedule an appointment. Both voices are synthetic, and the agent speaks first.",
      *         questions: {
-     *             "whispered": {
+     *             "talks_over_caller": {
      *                 type: "noul",
-     *                 instructions: "Is the voice whispering?"
+     *                 instructions: "Does the agent talk over the caller?"
+     *             },
+     *             "agent_tone": {
+     *                 type: "choice",
+     *                 instructions: "Which best describes the tone of the agent?",
+     *                 criteria: [{
+     *                         name: "warm",
+     *                         description: "Warm and friendly toward the caller"
+     *                     }, {
+     *                         name: "neutral",
+     *                         description: "Polite but impersonal"
+     *                     }, {
+     *                         name: "curt",
+     *                         description: "Short or dismissive with the caller"
+     *                     }]
+     *             },
+     *             "agent_naturalness": {
+     *                 type: "score",
+     *                 instructions: "How natural does the agent sound?",
+     *                 criteria: ["Not at all", "2", "3", "4", "Extremely"]
+     *             },
+     *             "agent_glitches": {
+     *                 type: "moment",
+     *                 instructions: "Where does the agent glitch, slur or sound robotic?"
      *             }
      *         }
      *     })

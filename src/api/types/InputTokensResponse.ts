@@ -4,6 +4,6 @@
  * The number of input tokens a decisions request would be billed for.
  */
 export interface InputTokensResponse {
-    /** The number of input tokens the request would be billed for, counted by Hume from the audio duration, the context, and each question's text, options and type. */
+    /** The number of input tokens the request would be billed for. */
     inputTokens: number;
 }
