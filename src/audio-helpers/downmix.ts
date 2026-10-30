@@ -14,6 +14,8 @@ export type DownmixStrategy = (typeof STRATEGIES)[number];
 
 // The model hears audio at this rate, in one channel.
 const MODEL_SAMPLE_RATE = 16000;
+// Front left and front right.
+const STEREO_MASK = 0x3;
 
 // The settings of ffmpeg's default resampler, which the API uses before the model hears the audio, so
 // audio resampled here reaches the model as it would have without this step.
@@ -54,9 +56,10 @@ export async function downmixWav(
     strategy: DownmixStrategy,
     signal?: AbortSignal,
 ): Promise<Downmixed> {
-    // ffmpeg weighs more than two channels by the speaker positions in the header's channel mask and
-    // leaves out the LFE channel, so they are sent as they are for the API to mix.
-    if (strategy === "none" || (strategy === "mix" && wav.channels > 2)) {
+    // ffmpeg weighs channels by the speakers in the header's channel mask and leaves out the LFE
+    // channel, and it refuses some two-channel masks, so only audio it mixes by adding the channels at
+    // equal weight is mixed here. Anything else is sent as it is for the API to mix.
+    if (strategy === "none" || (strategy === "mix" && !mixesEvenly(wav))) {
         return { data, wav };
     }
     const sampleRate = Math.min(wav.sampleRate, MODEL_SAMPLE_RATE);
@@ -91,6 +94,10 @@ export async function downmixWav(
         signal,
     );
     return { data: out, wav: converted };
+}
+
+function mixesEvenly({ channels, channelMask }: WavAudio): boolean {
+    return channels === 1 || (channels === 2 && (channelMask === 0 || channelMask === STEREO_MASK));
 }
 
 function* copyFirstChannel(data: Uint8Array, wav: WavAudio, picked: Uint8Array): Generator<void> {

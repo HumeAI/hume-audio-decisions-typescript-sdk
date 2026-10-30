@@ -27,6 +27,8 @@ export interface WavAudio {
     // The fmt chunk body written into every chunk.
     readonly fmt: Uint8Array;
     readonly channels: number;
+    // The speaker of each channel, from an extensible header, or 0 when the header names none.
+    readonly channelMask: number;
     readonly sampleRate: number;
     // Bytes in one sample of one channel.
     readonly sampleWidth: number;
@@ -103,6 +105,7 @@ export function samplesWav(
     return {
         fmt,
         channels,
+        channelMask: 0,
         sampleRate,
         sampleWidth,
         isFloat,
@@ -174,7 +177,8 @@ function parseFormat(body: Uint8Array): Format {
     }
     const extension = headerTag === EXTENSIBLE ? body.subarray(16, EXTENSIBLE_FMT_BYTES) : new Uint8Array(0);
     const fmt = fmtBody(headerTag, channels, sampleRate, sampleWidth, bits, extension);
-    return { fmt, channels, sampleRate, sampleWidth, isFloat: tag === IEEE_FLOAT, frameBytes };
+    const channelMask = headerTag === EXTENSIBLE ? view.getUint32(20, true) : 0;
+    return { fmt, channels, channelMask, sampleRate, sampleWidth, isFloat: tag === IEEE_FLOAT, frameBytes };
 }
 
 function fmtBody(

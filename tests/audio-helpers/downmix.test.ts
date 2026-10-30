@@ -131,6 +131,27 @@ describe("iterAudioChunks mixdown", () => {
         expect(samplesOf(audio)).toEqual(samplesOf(readWav(file)));
     });
 
+    it.each([
+        ["the center and LFE speakers, which the API mixes leaving out the LFE channel", 0xc],
+        ["the front left and center speakers, which the API cannot mix", 0x5],
+    ])("leaves two channels unchanged when mixing if they are placed at %s", async (_, channelMask) => {
+        const file = samplesWav(noise(1000, 2), { channels: 2, sampleRate: 48000, channelMask });
+
+        const audio = readWav(await downmix(file));
+
+        expect([...format(audio), audio.channelMask]).toEqual([48000, 2, 2, false, channelMask]);
+        expect(samplesOf(audio)).toEqual(samplesOf(readWav(file)));
+    });
+
+    it("mixes two channels placed at front left and front right as it mixes two unplaced channels", async () => {
+        const samples = noise(1000, 2);
+
+        const placed = await downmix(samplesWav(samples, { channels: 2, sampleRate: 48000, channelMask: 0x3 }));
+
+        expect(placed).toEqual(await downmix(samplesWav(samples, { channels: 2, sampleRate: 48000 })));
+        expect(format(readWav(placed))).toEqual([16000, 1, 4, true]);
+    });
+
     it("resamples audio above 16 kHz to 16 kHz, covering every input sample", async () => {
         const audio = readWav(await downmix(samplesWav(noise(44107, 1), { channels: 1, sampleRate: 44100 })));
 

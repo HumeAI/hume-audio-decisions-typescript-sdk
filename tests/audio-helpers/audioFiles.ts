@@ -5,6 +5,8 @@ import { join } from "path";
 
 const PCM = 0x0001;
 const IEEE_FLOAT = 0x0003;
+const EXTENSIBLE = 0xfffe;
+const SUBFORMAT_GUID_SUFFIX = [0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71];
 
 export async function collect<T>(items: AsyncIterable<T>): Promise<T[]> {
     const collected: T[] = [];
@@ -98,29 +100,38 @@ export function pcm(size: number): Uint8Array<ArrayBuffer> {
     return data;
 }
 
-/** A WAV file with a basic header holding `data`, samples already in the given format. */
+/**
+ * A WAV file holding `data`, samples already in the given format, with a basic header, or an extensible
+ * one when `channelMask` is given.
+ */
 export function wavFile({
     data,
     sampleRate,
     channels,
     sampleWidth = 2,
     isFloat = false,
+    channelMask,
 }: {
     data: Uint8Array;
     sampleRate: number;
     channels: number;
     sampleWidth?: number;
     isFloat?: boolean;
+    channelMask?: number;
 }): Uint8Array<ArrayBuffer> {
     const frameBytes = sampleWidth * channels;
-    const fmt = bytes(
-        uint16(isFloat ? IEEE_FLOAT : PCM),
+    const tag = isFloat ? IEEE_FLOAT : PCM;
+    let fmt = bytes(
+        uint16(channelMask === undefined ? tag : EXTENSIBLE),
         uint16(channels),
         uint32(sampleRate),
         uint32(sampleRate * frameBytes),
         uint16(frameBytes),
         uint16(sampleWidth * 8),
     );
+    if (channelMask !== undefined) {
+        fmt = bytes(fmt, uint16(22), uint16(sampleWidth * 8), uint32(channelMask), uint16(tag), SUBFORMAT_GUID_SUFFIX);
+    }
     const body = bytes("WAVE", "fmt ", uint32(fmt.length), fmt, "data", uint32(data.length), data);
     return bytes("RIFF", uint32(body.length), body);
 }
@@ -135,7 +146,8 @@ export function samplesWav(
         sampleRate,
         sampleWidth = 2,
         isFloat = false,
-    }: { channels: number; sampleRate: number; sampleWidth?: number; isFloat?: boolean },
+        channelMask,
+    }: { channels: number; sampleRate: number; sampleWidth?: number; isFloat?: boolean; channelMask?: number },
 ): Uint8Array<ArrayBuffer> {
     const data = new Uint8Array(samples.length * sampleWidth);
     const view = new DataView(data.buffer);
@@ -157,12 +169,14 @@ export function samplesWav(
             data[offset + byte] = Math.floor(stored / 2 ** (8 * byte)) & 0xff;
         }
     }
-    return wavFile({ data, sampleRate, channels, sampleWidth, isFloat });
+    return wavFile({ data, sampleRate, channels, sampleWidth, isFloat, channelMask });
 }
 
 export interface WavContents {
     formatTag: number;
     channels: number;
+    // 0 when the header is not extensible.
+    channelMask: number;
     sampleWidth: number;
     sampleRate: number;
     isFloat: boolean;
@@ -183,14 +197,17 @@ export function readWav(file: Uint8Array): WavContents {
         const size = view.getUint32(offset + 4, true);
         if (id === "fmt ") {
             const formatTag = view.getUint16(offset + 8, true);
+            const extensible = formatTag === EXTENSIBLE;
+            const tag = extensible ? view.getUint16(offset + 32, true) : formatTag;
             format = {
                 formatTag,
                 channels: view.getUint16(offset + 10, true),
+                channelMask: extensible ? view.getUint32(offset + 28, true) : 0,
                 sampleRate: view.getUint32(offset + 12, true),
                 byteRate: view.getUint32(offset + 16, true),
                 blockAlign: view.getUint16(offset + 20, true),
                 sampleWidth: view.getUint16(offset + 22, true) / 8,
-                isFloat: formatTag === IEEE_FLOAT,
+                isFloat: tag === IEEE_FLOAT,
             };
         }
         if (id === "data") {

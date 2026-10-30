@@ -69,8 +69,9 @@ export declare namespace iterAudioChunks {
          * 1. "mix", the default, mixes two channels into one the way the API does, adding them at
          *    -3 dB each, so the model hears the same audio as it would from the original file. A file
          *    that this would not make smaller, such as 16-bit mono at 16 kHz, is cut as it is, and so
-         *    is audio with more than two channels, because the API weighs those channels by the
-         *    speaker positions its header declares.
+         *    is audio with more than two channels, or two channels whose header places them anywhere
+         *    but front left and front right, because the API weighs those channels by the speaker
+         *    positions the header declares.
          * 2. "first_channel" keeps only the first channel of a file with more than one, so the model
          *    hears only that channel. The channel is copied exactly in the recording's sample format
          *    when that is no larger than resampling it, as it is at 16 kHz or below for every sample
