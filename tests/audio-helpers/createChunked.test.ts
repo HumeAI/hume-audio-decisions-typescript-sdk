@@ -229,6 +229,27 @@ describe("createChunked", () => {
         expect(result.complete).toBe(false);
     });
 
+    it("narrows each result to its response or error by its status", async () => {
+        const result = await decisions(
+            [],
+            failingAt(2, () => failed(402, "payment_required")),
+        ).createChunked({
+            request: REQUEST,
+            file: wav(3000),
+            maxChunkMs: 1000,
+        });
+
+        const outcomes = result.chunks.map((chunk) =>
+            chunk.status === "succeeded"
+                ? chunk.response.runId
+                : chunk.status === "failed"
+                  ? chunk.error.statusCode
+                  : chunk.status,
+        );
+
+        expect(outcomes).toEqual(["run-1", 402, "not_attempted"]);
+    });
+
     it("stops when no chunk has decoded before a decode failure", async () => {
         const sent: Sent[] = [];
 
@@ -440,7 +461,7 @@ describe("resumeMs", () => {
             request: REQUEST,
             file: audio,
             maxChunkMs: 1000,
-            startMs: stopped.resumeMs ?? undefined,
+            startMs: stopped.resumeMs,
         });
 
         expect(stopped.resumeMs).toBe(1000);
@@ -465,7 +486,7 @@ describe("resumeMs", () => {
             request: REQUEST,
             file: audio,
             maxChunkMs: 1000,
-            startMs: stopped.resumeMs ?? undefined,
+            startMs: stopped.resumeMs,
         });
 
         expect(stopped.resumeMs).toBe(1446);
@@ -491,14 +512,14 @@ describe("resumeMs", () => {
     it.each<[string, Respond]>([
         ["complete", succeeded],
         ["only a chunk that could not be decoded failed", failingAt(2, () => failed(400, "audio_decode_failed"))],
-    ])("is null when no chunk stopped the job: %s", async (_name, respond) => {
+    ])("is undefined when no chunk stopped the job: %s", async (_name, respond) => {
         const result = await decisions([], respond).createChunked({
             request: REQUEST,
             file: wav(3000),
             maxChunkMs: 1000,
         });
 
-        expect(result.resumeMs).toBeNull();
+        expect(result.resumeMs).toBeUndefined();
     });
 
     it.each<[number | undefined, number]>([
@@ -519,7 +540,7 @@ describe("resumeMs", () => {
             request: REQUEST,
             file: audio,
             maxChunkMs: 1000,
-            startMs: stopped.resumeMs ?? undefined,
+            startMs: stopped.resumeMs,
         });
 
         expect(stopped.chunks[0].startMs).toBeLessThan(resumeMs);

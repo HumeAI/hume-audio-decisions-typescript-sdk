@@ -567,7 +567,7 @@ export class DecisionsClient {
      *         },
      *         maxChunkMs: 300000
      *     })) {
-     *         if (chunk.response !== undefined) {
+     *         if (chunk.status === "succeeded") {
      *             console.log(chunk.startMs, chunk.response.runId);
      *         } else {
      *             console.log(chunk.startMs, chunk.status, chunk.error);
@@ -615,7 +615,7 @@ export class DecisionsClient {
      *         maxChunkMs: 300000
      *     });
      *     for (const chunk of result.chunks) {
-     *         if (chunk.response !== undefined) {
+     *         if (chunk.status === "succeeded") {
      *             console.log(chunk.startMs, chunk.response.runId);
      *         } else {
      *             console.log(chunk.startMs, chunk.status, chunk.error);

@@ -214,7 +214,7 @@ const result = await client.decisions.createChunked({
 });
 
 for (const chunk of result.chunks) {
-    if (chunk.response === undefined) {
+    if (chunk.status !== "succeeded") {
         console.log(`chunk ${chunk.index} (${chunk.startMs} to ${chunk.endMs} ms): ${chunk.status}, ${chunk.error}`);
         continue;
     }
@@ -283,7 +283,7 @@ A request the API rejects, or whose connection fails, does not reject. Its error
 3. Rate limits and server errors are retried first, as for any request, so they stop the job only once the retries run out. Pass `maxRetries` in the request options to allow more.
 4. Aborting the `abortSignal` in the request options is not recorded on a chunk. `createChunked` rejects with the same `DecisionsError` as an aborted `create`, no further chunk is sent, and the responses already received are lost, so use `iterCreateChunked` to keep them.
 
-To resume a job that stopped, call `createChunked` again with `startMs: result.resumeMs` and the same `endMs`. `resumeMs` is where the chunk before the one that stopped the job ends, or `null` when no chunk stopped the job. The new job sends the audio of the chunk that stopped the job and everything after it, in no more chunks than the stopped job had left. It does not resend earlier chunks that failed because their audio could not be decoded, so its `complete` covers only the range it sent. With the default `split: "even"`, its cuts after the first chunk can fall a few MP3 frames or a millisecond of WAV from the stopped job's. A WAV chunk's `startMs` is rounded to the millisecond, so the resumed job can skip or repeat a few samples where it starts.
+To resume a job that stopped, call `createChunked` again with `startMs: result.resumeMs` and the same `endMs`. `resumeMs` is where the chunk before the one that stopped the job ends, or undefined when no chunk stopped the job. The new job sends the audio of the chunk that stopped the job and everything after it, in no more chunks than the stopped job had left. It does not resend earlier chunks that failed because their audio could not be decoded, so its `complete` covers only the range it sent. With the default `split: "even"`, its cuts after the first chunk can fall a few MP3 frames or a millisecond of WAV from the stopped job's. A WAV chunk's `startMs` is rounded to the millisecond, so the resumed job can skip or repeat a few samples where it starts.
 
 ### Memory
 
@@ -311,7 +311,7 @@ for await (const chunk of client.decisions.iterCreateChunked({
     },
     maxChunkMs: 300_000,
 })) {
-    if (chunk.response !== undefined) {
+    if (chunk.status === "succeeded") {
         await writeFile(`chunk_${chunk.index}_${chunk.startMs}.json`, JSON.stringify(chunk.response));
     }
 }
@@ -322,7 +322,7 @@ for await (const chunk of client.decisions.iterCreateChunked({
 To resume such a job, keep the results it yields.
 
 1. When a chunk stopped the job, `new ChunkedDecisionsResult(results, startMs).resumeMs` gives where to resume, with `ChunkedDecisionsResult` from `@humeai/decisions/audio-helpers` and the `startMs` the job was given.
-2. When your process stopped instead, `resumeMs` is `null`. Resume at the `endMs` of the last chunk you have a result for, not at the `startMs` of the chunk after it, which for an MP3 file includes frames repeated from the chunk you already have.
+2. When your process stopped instead, `resumeMs` is undefined. Resume at the `endMs` of the last chunk you have a result for, not at the `startMs` of the chunk after it, which for an MP3 file includes frames repeated from the chunk you already have.
 
 In both cases, pass the same `endMs` as the job that stopped. Chunks that failed because their audio could not be decoded are not sent again, including the last chunk you have a result for, so check your saved results for them.
 

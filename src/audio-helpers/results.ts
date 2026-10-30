@@ -10,41 +10,47 @@ import { checkInteger } from "./checks.js";
 import { type iterAudioChunks, type PlannedRecording, prepareChunks } from "./chunks.js";
 import type { DownmixOptions } from "./files.js";
 
-export type ChunkStatus = "succeeded" | "failed" | "not_attempted";
-
-/** The outcome of one chunk's request. */
-export class ChunkResult {
-    constructor(
-        /** Position of the chunk in the recording, starting at 0. */
-        public readonly index: number,
-        /**
-         * Where the chunk starts in the recording, in milliseconds. A moment's `audioStartMs` and
-         * `audioEndMs` are measured from the start of the chunk, so add this to place the moment in the
-         * recording. The first chunk of an MP3 file can start a few tens of milliseconds before 0.
-         */
-        public readonly startMs: number,
-        /** Where the chunk ends in the recording, in milliseconds. */
-        public readonly endMs: number,
-        /** The API's response for the chunk, unchanged, when the request succeeded. */
-        public readonly response: DecisionsResponse | undefined,
-        /**
-         * The error the request threw, when it failed. When the response's body could not be read, a
-         * DecisionsError with no status code whose `cause` holds the parse error. Undefined when the
-         * request succeeded or was never sent.
-         */
-        public readonly error: DecisionsError | undefined,
-    ) {}
-
-    public get status(): ChunkStatus {
-        if (this.response !== undefined) {
-            return "succeeded";
-        }
-        if (this.error !== undefined) {
-            return "failed";
-        }
-        return "not_attempted";
-    }
+interface ChunkPosition {
+    /** Position of the chunk in the recording, starting at 0. */
+    readonly index: number;
+    /**
+     * Where the chunk starts in the recording, in milliseconds. A moment's `audioStartMs` and
+     * `audioEndMs` are measured from the start of the chunk, so add this to place the moment in the
+     * recording. The first chunk of an MP3 file can start a few tens of milliseconds before 0.
+     */
+    readonly startMs: number;
+    /** Where the chunk ends in the recording, in milliseconds. */
+    readonly endMs: number;
 }
+
+interface SucceededChunk extends ChunkPosition {
+    readonly status: "succeeded";
+    /** The API's response for the chunk, unchanged. */
+    readonly response: DecisionsResponse;
+    readonly error: undefined;
+}
+
+interface FailedChunk extends ChunkPosition {
+    readonly status: "failed";
+    readonly response: undefined;
+    /**
+     * The error the request threw. When the response's body could not be read, a DecisionsError with
+     * no status code whose `cause` holds the parse error.
+     */
+    readonly error: DecisionsError;
+}
+
+interface NotAttemptedChunk extends ChunkPosition {
+    /** No request was sent for the chunk, so it was not billed. */
+    readonly status: "not_attempted";
+    readonly response: undefined;
+    readonly error: undefined;
+}
+
+/** The outcome of one chunk's request. Checking `status` narrows it to the chunk's response or error. */
+export type ChunkResult = SucceededChunk | FailedChunk | NotAttemptedChunk;
+
+export type ChunkStatus = ChunkResult["status"];
 
 /** The outcome of every chunk's request, in the order of the chunks. */
 export class ChunkedDecisionsResult {
@@ -70,16 +76,16 @@ export class ChunkedDecisionsResult {
 
     /** Whether every chunk's request succeeded. */
     public get complete(): boolean {
-        return this.chunks.every((chunk) => chunk.response !== undefined);
+        return this.chunks.every((chunk) => chunk.status === "succeeded");
     }
 
     /**
      * The `startMs` to give a new job, with the same `endMs`, so that it sends again the audio from
      * the chunk that stopped this job to the end. Earlier chunks that failed because their audio could
      * not be decoded are not sent again. A WAV chunk's `endMs` is rounded to the millisecond, so the
-     * new job can skip or repeat a few samples where it starts. Null when no chunk stopped the job.
+     * new job can skip or repeat a few samples where it starts. Undefined when no chunk stopped the job.
      */
-    public get resumeMs(): number | null {
+    public get resumeMs(): number | undefined {
         const rule = new StopRule();
         for (let position = 0; position < this.chunks.length; position++) {
             rule.record(this.chunks[position]);
@@ -89,7 +95,7 @@ export class ChunkedDecisionsResult {
                 return position > 0 ? this.chunks[position - 1].endMs : this.startMs;
             }
         }
-        return null;
+        return undefined;
     }
 }
 
@@ -119,16 +125,17 @@ async function* send(
     const rule = new StopRule();
     // A chunk's data is copied only when it is sent, so the chunks after a stop cost nothing.
     for (const chunk of chunks) {
-        let response: DecisionsResponse | undefined;
-        let error: DecisionsError | undefined;
+        const position = { index: chunk.index, startMs: chunk.startMs, endMs: chunk.endMs };
+        let result: ChunkResult = { ...position, status: "not_attempted", response: undefined, error: undefined };
         if (!rule.stopped) {
             try {
-                response = await create({
+                const response = await create({
                     request,
                     file: { data: chunk.build(), filename, contentType },
                     // The chunks were mixed down when they were planned.
                     downmixStrategy: "none",
                 });
+                result = { ...position, status: "succeeded", response, error: undefined };
             } catch (raised) {
                 // An abort ends the job rather than failing one chunk. Anything other than a
                 // DecisionsError did not come from the request, so it is not a chunk's outcome either,
@@ -138,13 +145,13 @@ async function* send(
                 if (signal?.aborted || !(raised instanceof DecisionsError || raised instanceof ParseError)) {
                     throw raised;
                 }
-                error =
+                const error =
                     raised instanceof ParseError
                         ? new DecisionsError({ message: "The API's response could not be read.", cause: raised })
                         : raised;
+                result = { ...position, status: "failed", response: undefined, error };
             }
         }
-        const result = new ChunkResult(chunk.index, chunk.startMs, chunk.endMs, response, error);
         rule.record(result);
         yield result;
     }
@@ -165,8 +172,12 @@ export async function collectResults(
 // Sending chunks and finding resumeMs in a finished result must agree on which chunk stopped the job,
 // so both feed the chunks through this in order.
 class StopRule {
-    public stopped = false;
+    private _stopped = false;
     private anySucceeded = false;
+
+    public get stopped(): boolean {
+        return this._stopped;
+    }
 
     public record(chunk: ChunkResult): void {
         // A decode failure can come from one damaged stretch of the recording, but until some chunk has
@@ -178,9 +189,9 @@ class StopRule {
             this.anySucceeded &&
             chunk.error instanceof BadRequestError &&
             chunk.error.body.code === "audio_decode_failed";
-        if (chunk.error !== undefined && !failsAlone) {
-            this.stopped = true;
+        if (chunk.status === "failed" && !failsAlone) {
+            this._stopped = true;
         }
-        this.anySucceeded ||= chunk.response !== undefined;
+        this.anySucceeded ||= chunk.status === "succeeded";
     }
 }
