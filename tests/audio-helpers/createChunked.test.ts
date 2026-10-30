@@ -678,8 +678,8 @@ describe("create", () => {
 });
 
 describe("aborting during the mixdown", () => {
-    // A minute at 192 kHz takes a few hundred milliseconds to resample, several times the pause interval.
-    const audio = samplesWav(new Float64Array(192000 * 60), { channels: 1, sampleRate: 192000 });
+    // Resampling 10 seconds at 48 kHz takes about 20 blocks of work.
+    const audio = samplesWav(new Float64Array(48000 * 10), { channels: 1, sampleRate: 48000 });
 
     it.each<[string, (client: DecisionsClient["decisions"], signal: AbortSignal) => Promise<unknown>]>([
         ["create", (client, abortSignal) => client.create({ request: REQUEST, file: audio }, { abortSignal })],
@@ -689,19 +689,28 @@ describe("aborting during the mixdown", () => {
                 client.createChunked({ request: REQUEST, file: audio, maxChunkMs: 300_000 }, { abortSignal }),
         ],
     ])("rejects %s with the abort error without finishing the mixdown or sending anything", async (_name, call) => {
-        let started = Date.now();
-        await iterAudioChunks(audio, { maxChunkMs: 300_000 }).next();
-        const mixdownMs = Date.now() - started;
+        // Every read of the clock moves it a second on, so the mixdown pauses after each block of work
+        // however fast it runs, and reads the clock once per block.
+        let clockReads = 0;
+        const clock = vi.spyOn(Date, "now").mockImplementation(() => ++clockReads * 1000);
         const sent: Sent[] = [];
         const controller = new AbortController();
+        let readsAtAbort = 0;
+        setTimeout(() => {
+            readsAtAbort = clockReads;
+            controller.abort();
+        }, 0);
 
-        started = Date.now();
-        const pending = rejection(call(decisions(sent), controller.signal));
-        setTimeout(() => controller.abort(), 0);
-        const error = await pending;
+        let error: Error;
+        try {
+            error = await rejection(call(decisions(sent), controller.signal));
+        } finally {
+            clock.mockRestore();
+        }
 
         expectAbortError(error);
-        expect(Date.now() - started).toBeLessThan(mixdownMs / 2);
+        expect(readsAtAbort).toBeGreaterThan(0);
+        expect(clockReads).toBe(readsAtAbort);
         expect(sent).toEqual([]);
     });
 });
