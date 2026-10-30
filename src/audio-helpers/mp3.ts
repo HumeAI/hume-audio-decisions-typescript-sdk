@@ -1,6 +1,7 @@
 // Maintained by hand and listed in .fernignore, so SDK regeneration leaves it in place.
 
 import { hasBytes, uint32BE } from "./bytes.js";
+import { UnsupportedAudioError } from "./errors.js";
 
 const CONVERT_COMMAND = "ffmpeg -i input.mp3 -c:a libmp3lame -q:a 2 output.mp3";
 
@@ -279,8 +280,8 @@ function matchingHeader(data: Uint8Array, offset: number, first: Header): Header
     return header.version === first.version && header.sampleRate === first.sampleRate ? header : undefined;
 }
 
-function unsupported(reason: string): Error {
-    return new Error(
+function unsupported(reason: string): UnsupportedAudioError {
+    return new UnsupportedAudioError(
         `The audio is not a supported MP3 file (${reason}). Convert it first, for example with: ${CONVERT_COMMAND}`,
     );
 }

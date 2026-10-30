@@ -3,6 +3,7 @@
 import type { Uploadable } from "../core/file/index.js";
 import { checkChoice, checkInteger } from "./checks.js";
 import { checkDownmixStrategy, type DownmixStrategy, downmixWav } from "./downmix.js";
+import { UnsupportedAudioError } from "./errors.js";
 import { checkFile, readFile } from "./files.js";
 import { ceilDiv, floorDiv, roundDiv } from "./integers.js";
 import { framesNeededBefore, isMp3, type Mp3Audio, mp3Chunk, parseMp3 } from "./mp3.js";
@@ -174,7 +175,7 @@ type Cut = [start: number, end: number];
  * not select audio within the recording, `maxChunkMs` is too long with "fixed" for a WAV chunk to
  * fit the API's size limit, or too short for an MP3 chunk to hold a new frame and the frames it
  * needs.
- * @throws {Error} From iteration, if the recording is empty or not a file this helper supports, such
+ * @throws {UnsupportedAudioError} From iteration, if the recording is empty or not a file this helper supports, such
  * as a compressed WAV or RF64 file. Any damage to an MP3 file is found before the first chunk, so no
  * chunk is produced from a file that cannot be read to the end.
  *
@@ -257,7 +258,7 @@ async function planAudioChunks(
     if (isMp3(data)) {
         return mp3Chunks(data, parseMp3(data), options);
     }
-    throw new Error("Unsupported audio format. Only MP3 and WAV files can be split into chunks.");
+    throw new UnsupportedAudioError("Unsupported audio format. Only MP3 and WAV files can be split into chunks.");
 }
 
 /** The first and last positions of the range `startMs` and `endMs` select from `length` positions. */
@@ -269,7 +270,7 @@ function selectRange(
     endMs: number | undefined,
 ): Cut {
     if (length === 0) {
-        throw new Error("The audio is empty.");
+        throw new UnsupportedAudioError("The audio is empty.");
     }
     // The longest range allowed ends at the duration that the final chunk reports.
     // A recording shorter than half a millisecond has a duration of 0 ms but still starts at 0.

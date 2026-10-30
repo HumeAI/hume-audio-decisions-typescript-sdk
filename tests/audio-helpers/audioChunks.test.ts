@@ -1,6 +1,6 @@
 // Maintained by hand and listed in .fernignore, so SDK regeneration leaves it in place.
 
-import { type DownmixStrategy, iterAudioChunks } from "../../src/audio-helpers/index";
+import { type DownmixStrategy, iterAudioChunks, UnsupportedAudioError } from "../../src/audio-helpers/index";
 import {
     bytes,
     collect,
@@ -269,20 +269,20 @@ describe("iterAudioChunks with WAV files", () => {
     ])("rejects an unsupported WAV file with a conversion command (%#: %s)", async (recording, message) => {
         const error = await iterationError(iterAudioChunks(recording, { maxChunkMs: 1000 }));
 
-        expectError(error, Error, message);
+        expectError(error, UnsupportedAudioError, message);
         expect(error.message).toContain("ffmpeg -i input.wav");
     });
 
     it("rejects audio that is neither MP3 nor WAV", async () => {
         const error = await iterationError(iterAudioChunks(bytes("OggS", pcm(100)), { maxChunkMs: 1000 }));
 
-        expectError(error, Error, "Only MP3 and WAV files");
+        expectError(error, UnsupportedAudioError, "Only MP3 and WAV files");
     });
 
     it("rejects an empty recording", async () => {
         const error = await iterationError(iterAudioChunks(mono16k(new Uint8Array(0)), { maxChunkMs: 1000 }));
 
-        expectError(error, Error, "empty");
+        expectError(error, UnsupportedAudioError, "empty");
     });
 
     it("rejects a closed recording that declares no audio as empty rather than reading the chunks after it", async () => {
@@ -290,7 +290,7 @@ describe("iterAudioChunks with WAV files", () => {
 
         const error = await iterationError(iterAudioChunks(recording, { maxChunkMs: 1000 }));
 
-        expectError(error, Error, "empty");
+        expectError(error, UnsupportedAudioError, "empty");
     });
 
     it("accepts a maxChunkMs of 1", async () => {

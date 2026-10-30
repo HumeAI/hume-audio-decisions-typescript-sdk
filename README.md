@@ -287,7 +287,7 @@ To resume a job that stopped, call `createChunked` again with `startMs: result.r
 
 ### Memory
 
-The whole recording is read into memory, and a WAV file is mixed down, before the first request, so a file that cannot be split is rejected before anything is billed. An hour of 16-bit stereo WAV at 48 kHz is about 690 MB, plus about 230 MB for the mixed-down copy.
+The whole recording is read into memory, and a WAV file is mixed down, before the first request, so a file that cannot be split is rejected before anything is billed, with an `UnsupportedAudioError` from `@humeai/decisions/audio-helpers` when it is empty or not a supported MP3 or WAV file. An hour of 16-bit stereo WAV at 48 kHz is about 690 MB, plus about 230 MB for the mixed-down copy.
 
 ### Saving results as they arrive
 

@@ -1,6 +1,11 @@
 // Maintained by hand and listed in .fernignore, so SDK regeneration leaves it in place.
 
-import { type AudioChunk, type ChunkSplit, iterAudioChunks } from "../../src/audio-helpers/index";
+import {
+    type AudioChunk,
+    type ChunkSplit,
+    iterAudioChunks,
+    UnsupportedAudioError,
+} from "../../src/audio-helpers/index";
 import { asset, bytes, collect, expectBytes, expectError, iterationError, times } from "./audioFiles";
 
 const MPEG1 = 3;
@@ -358,7 +363,7 @@ describe("iterAudioChunks with MP3 files", () => {
 
         const error = await iterationError(chunks);
 
-        expectError(error, Error, "no MPEG audio frame at byte 37530");
+        expectError(error, UnsupportedAudioError, "no MPEG audio frame at byte 37530");
     });
 
     it.each([
@@ -373,14 +378,14 @@ describe("iterAudioChunks with MP3 files", () => {
     ])("rejects an unsupported MP3 with a conversion command (%#: %s)", async (recording, message) => {
         const error = await iterationError(iterAudioChunks(recording, { maxChunkMs: 1000 }));
 
-        expectError(error, Error, message);
+        expectError(error, UnsupportedAudioError, message);
         expect(error.message).toContain("ffmpeg -i input.mp3");
     });
 
     it("rejects an MP3 holding only a header frame as empty", async () => {
         const error = await iterationError(iterAudioChunks(vbrFrame("Info", 36), { maxChunkMs: 1000 }));
 
-        expectError(error, Error, "empty");
+        expectError(error, UnsupportedAudioError, "empty");
     });
 
     it("rejects a chunk duration shorter than one frame", async () => {

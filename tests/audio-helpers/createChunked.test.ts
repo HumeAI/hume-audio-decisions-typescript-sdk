@@ -6,6 +6,7 @@ import {
     type ChunkResult,
     type DownmixStrategy,
     iterAudioChunks,
+    UnsupportedAudioError,
 } from "../../src/audio-helpers/index";
 import { DecisionsClient } from "../../src/Client";
 import { DecisionsError } from "../../src/errors/index";
@@ -394,7 +395,7 @@ describe("iterCreateChunked", () => {
             decisions(sent).iterCreateChunked({ request: REQUEST, file: audio, maxChunkMs: 1000 }),
         );
 
-        expectError(error, Error, "no MPEG audio frame at byte");
+        expectError(error, UnsupportedAudioError, "no MPEG audio frame at byte");
         expect(sent).toEqual([]);
     });
 

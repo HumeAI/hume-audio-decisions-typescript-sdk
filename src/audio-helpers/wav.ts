@@ -1,6 +1,7 @@
 // Maintained by hand and listed in .fernignore, so SDK regeneration leaves it in place.
 
 import { dataView, hasBytes, writeAscii } from "./bytes.js";
+import { UnsupportedAudioError } from "./errors.js";
 
 const CONVERT_COMMAND = "ffmpeg -i input.wav -c:a pcm_s16le output.wav";
 
@@ -206,8 +207,8 @@ function fmtBody(
     return fmt;
 }
 
-function unsupported(reason: string): Error {
-    return new Error(
+function unsupported(reason: string): UnsupportedAudioError {
+    return new UnsupportedAudioError(
         `The audio is not a supported WAV file (${reason}). Convert it first, for example with: ${CONVERT_COMMAND}`,
     );
 }

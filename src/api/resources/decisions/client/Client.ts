@@ -551,7 +551,7 @@ export class DecisionsClient {
      *
      * @throws {TypeError} From this call, if `maxChunkMs`, `startMs` or `endMs` is not a safe integer, or `file` is a string.
      * @throws {RangeError} From this call, if an option is out of range, and from iteration, if the recording cannot be split as requested. Nothing has been sent when either is thrown.
-     * @throws {Error} From iteration, if the recording is empty or not a file `iterAudioChunks` supports.
+     * @throws {UnsupportedAudioError} From iteration, if the recording is empty or not a file `iterAudioChunks` supports.
      * @throws {@link errors.DecisionsError} From iteration, if `requestOptions.abortSignal` aborts.
      *
      * @example
@@ -598,7 +598,7 @@ export class DecisionsClient {
      *
      * @throws {TypeError} If `maxChunkMs`, `startMs` or `endMs` is not a safe integer, or `file` is a string. Nothing has been sent.
      * @throws {RangeError} If an option is out of range or the recording cannot be split as requested. Nothing has been sent.
-     * @throws {Error} If the recording is empty or not a file `iterAudioChunks` supports.
+     * @throws {UnsupportedAudioError} If the recording is empty or not a file `iterAudioChunks` supports.
      * @throws {@link errors.DecisionsError} If `requestOptions.abortSignal` aborts.
      *
      * @example
