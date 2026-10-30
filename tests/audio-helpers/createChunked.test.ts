@@ -357,14 +357,18 @@ describe("iterCreateChunked", () => {
         ]);
     });
 
-    it("sends nothing when the recording cannot be split", async () => {
+    it("sends nothing for a recording damaged near its end", async () => {
         const sent: Sent[] = [];
+        // The chunks before the damage can be cut without reading it, so nothing is sent only if the
+        // whole recording is read first.
+        const audio = asset("tone_mpeg1_32k.mp3");
+        audio.fill(0, 14_000, 14_200);
 
         const error = await iterationError(
-            decisions(sent).iterCreateChunked({ request: REQUEST, file: wav(2000), maxChunkMs: 1000, endMs: 2500 }),
+            decisions(sent).iterCreateChunked({ request: REQUEST, file: audio, maxChunkMs: 1000 }),
         );
 
-        expectError(error, RangeError, "endMs must not exceed");
+        expectError(error, Error, "no MPEG audio frame at byte");
         expect(sent).toEqual([]);
     });
 
@@ -597,8 +601,15 @@ describe("create", () => {
 
     it("sends a stream it could not mix down as it is, although the stream cannot be read again", async () => {
         const audio = asset("tone_mpeg1_32k.mp3");
+        const stream = new ReadableStream<Uint8Array>({
+            start(controller) {
+                controller.enqueue(audio.slice(0, 1000));
+                controller.enqueue(audio.slice(1000));
+                controller.close();
+            },
+        });
 
-        expectBytes([await uploaded(new Blob([audio]).stream())], [audio]);
+        expectBytes([await uploaded(stream)], [audio]);
     });
 
     it("sends a WAV file it cannot read as it is", async () => {
@@ -607,6 +618,20 @@ describe("create", () => {
         new DataView(audio.buffer).setUint16(20, 2, true);
 
         expectBytes([await uploaded(audio)], [audio]);
+    });
+
+    it("rejects a file given as a string, pointing to { path }, sending nothing", async () => {
+        const sent: Sent[] = [];
+
+        const error = await rejection(
+            decisions(sent).create({
+                request: REQUEST,
+                file: "call.wav" as unknown as Decisions.DecisionsUpload["file"],
+            }),
+        );
+
+        expectError(error, TypeError, 'pass { path: "call.wav" }');
+        expect(sent).toEqual([]);
     });
 
     it("rejects a downmixStrategy other than mix, first_channel or none, sending nothing", async () => {

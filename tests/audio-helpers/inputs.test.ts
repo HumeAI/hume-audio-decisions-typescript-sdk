@@ -81,6 +81,14 @@ describe("iterAudioChunks inputs", () => {
         expectError(error, TypeError, 'To read a file from disk, pass { path: "call.wav" }.');
     });
 
+    it("rejects data of a type it cannot read, listing the types it can", async () => {
+        const error = await iterationError(
+            iterAudioChunks({ data: 42 } as unknown as Uploadable, { maxChunkMs: 1000 }),
+        );
+
+        expectError(error, TypeError, "file must be a Blob, a stream, an ArrayBuffer or a typed array");
+    });
+
     it("rejects a stream that yields text rather than bytes", async () => {
         const error = await iterationError(iterAudioChunks(Readable.from(["RIFF"]), { maxChunkMs: 1000 }));
 

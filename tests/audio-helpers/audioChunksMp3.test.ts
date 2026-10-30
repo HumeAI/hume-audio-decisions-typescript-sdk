@@ -78,14 +78,28 @@ function vbrFrame(marker: string, offset: number, { mono = false }: { mono?: boo
 }
 
 /** Builds an Info frame stating the frame count and, in a LAME tag, the samples the encoder added. */
-function lameFrame({ delay, padding, frames }: { delay: number; padding: number; frames: number }): Uint8Array {
-    const data = vbrFrame("Info", 36);
+function lameFrame({
+    delay,
+    padding,
+    frames,
+    version = MPEG1,
+}: {
+    delay: number;
+    padding: number;
+    frames: number;
+    version?: number;
+}): Uint8Array {
+    // The Info header follows the side information, which is 32 bytes in a stereo MPEG-1 frame and 17
+    // in a stereo MPEG-2 frame of 64 kbit/s at 22,050 Hz.
+    const info = version === MPEG1 ? 36 : 21;
+    const data = version === MPEG1 ? frame(0) : frame(0, { version, bitrateIndex: 8, length: 208 });
+    data.set(bytes("Info"), info);
     // Only the frame count is present, so the LAME tag follows it.
     const view = new DataView(data.buffer);
-    view.setUint32(40, 1);
-    view.setUint32(44, frames);
-    data.set(bytes("LAME"), 48);
-    data.set([delay >> 4, ((delay & 0x0f) << 4) | (padding >> 8), padding & 0xff], 69);
+    view.setUint32(info + 4, 1);
+    view.setUint32(info + 8, frames);
+    data.set(bytes("LAME"), info + 12);
+    data.set([delay >> 4, ((delay & 0x0f) << 4) | (padding >> 8), padding & 0xff], info + 33);
     return data;
 }
 
@@ -260,6 +274,20 @@ describe("iterAudioChunks with MP3 files", () => {
         expect(chunks.map((c) => c.data)).toEqual([concatFrames(all)]);
         const error = await iterationError(iterAudioChunks(recording, { maxChunkMs: 1000, endMs: 226 }));
         expectError(error, RangeError, "endMs must not exceed the recording's duration of 225 ms");
+    });
+
+    it("keeps the first frame of an MPEG-2 file whose recording starts after it", async () => {
+        // Players leave out 576 + 529 samples at the start, nearly two MPEG-2 frames of 576 samples, so
+        // the recording starts partway through the second frame.
+        const all = frames(20, { version: MPEG2, bitrateIndex: 8, length: 208 });
+        const recording = bytes(
+            lameFrame({ delay: 576, padding: 1000, frames: 20, version: MPEG2 }),
+            concatFrames(all),
+        );
+
+        const chunks = await collect(iterAudioChunks(recording, { maxChunkMs: 300_000 }));
+
+        expect(chunks.map((c) => c.data)).toEqual([concatFrames(all)]);
     });
 
     it("continues from a chunk when an MP3 range with a LAME tag starts where that chunk reported it ends", async () => {
@@ -454,6 +482,18 @@ describe("iterAudioChunks with MP3 files", () => {
 
         expectError(error, RangeError, "maxChunkMs must be at least 288 ms");
         expect(error.message).toContain("up to 10 frames before them");
+    });
+
+    it("rejects a chunk duration too short for the frames needed by a frame that no chunk starts at", async () => {
+        // Frame 5 stores 511 bytes in the 2 frames before it, so frame 6 needs those, the frame a
+        // decoder may drop, and frame 5. Chunks of 4 frames start new frames at 0, 4, 7 and so on, but
+        // a range starting at frame 6 could not be cut, so no range accepts this maxChunkMs.
+        const all = Array.from({ length: 20 }, (_, n) => frame(n, { reservoir: n === 5 ? 511 : 0 }));
+
+        const error = await iterationError(iterAudioChunks(concatFrames(all), { maxChunkMs: 120 }));
+
+        expectError(error, RangeError, "maxChunkMs must be at least 131 ms");
+        expect(error.message).toContain("up to 4 frames before them");
     });
 
     it("advances a frame at a time with a chunk duration just long enough for the frames needed", async () => {

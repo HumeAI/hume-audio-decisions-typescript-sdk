@@ -222,7 +222,9 @@ describe("iterAudioChunks with WAV files", () => {
 
     it("reads a recording that was never closed to the end", async () => {
         const audio = pcm(16 * 2 * 10);
-        const recording = rawWav({ data: audio, dataSize: 0, riffSize: 4 });
+        // The writer filled in the sizes when it wrote the header, before any audio.
+        const header = rawWav({ data: new Uint8Array(0) });
+        const recording = rawWav({ data: audio, dataSize: 0, riffSize: header.length - 8 });
 
         const [chunk] = await collect(iterAudioChunks(recording, { maxChunkMs: 10 }));
 
@@ -248,6 +250,25 @@ describe("iterAudioChunks with WAV files", () => {
         // The block size would not fit the header's 16 bits.
         [rawWav({ channels: 40000, data: pcm(32), blockAlign: 0 }), "inconsistent"],
         [bytes("RIFF", uint32(4), "WAVE"), "no data chunk"],
+        [
+            bytes(
+                "RIFF",
+                uint32(68),
+                "WAVE",
+                "data",
+                uint32(32),
+                pcm(32),
+                "fmt ",
+                uint32(16),
+                uint16(1),
+                uint16(1),
+                uint32(16000),
+                uint32(32000),
+                uint16(2),
+                uint16(16),
+            ),
+            "the data chunk comes before the fmt chunk",
+        ],
     ])("rejects an unsupported WAV file with a conversion command (%#: %s)", async (recording, message) => {
         const error = await iterationError(iterAudioChunks(recording, { maxChunkMs: 1000 }));
 
@@ -265,6 +286,24 @@ describe("iterAudioChunks with WAV files", () => {
         const error = await iterationError(iterAudioChunks(mono16k(new Uint8Array(0)), { maxChunkMs: 1000 }));
 
         expectError(error, Error, "empty");
+    });
+
+    it("rejects a closed recording that declares no audio as empty rather than reading the chunks after it", async () => {
+        const recording = rawWav({ data: new Uint8Array(0), afterData: bytes("LIST", uint32(4), "INFO") });
+
+        const error = await iterationError(iterAudioChunks(recording, { maxChunkMs: 1000 }));
+
+        expectError(error, Error, "empty");
+    });
+
+    it("accepts a maxChunkMs of 1", async () => {
+        const chunks = await collect(iterAudioChunks(mono16k(pcm(3 * 16 * 2)), { maxChunkMs: 1 }));
+
+        expect(times(chunks)).toEqual([
+            [0, 1],
+            [1, 2],
+            [2, 3],
+        ]);
     });
 
     it.each([0, 300_001])("rejects a maxChunkMs of %i as out of range", (maxChunkMs) => {

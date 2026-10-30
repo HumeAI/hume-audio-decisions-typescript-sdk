@@ -21,6 +21,8 @@ const FFMPEG_SCENARIOS: [number, number, DownmixStrategy, boolean][] = [
     // Rates whose ratio to 16 kHz needs more filter phases than ffmpeg uses, so it interpolates.
     [44101, 2, "mix", false],
     [22051, 2, "mix", false],
+    // A rate that interpolates with a filter length that is a multiple of 8, which ffmpeg does not pad.
+    [23001, 2, "mix", false],
     [8000, 2, "mix", false],
     [48000, 2, "first_channel", false],
     [8000, 2, "first_channel", false],
@@ -123,11 +125,11 @@ describe("iterAudioChunks mixdown", () => {
     });
 
     it("leaves audio with more than two channels unchanged when mixing", async () => {
-        const file = samplesWav(noise(1000, 4), { channels: 4, sampleRate: 48000 });
+        const file = samplesWav(noise(1000, 3), { channels: 3, sampleRate: 48000 });
 
         const audio = readWav(await downmix(file));
 
-        expect(format(audio)).toEqual([48000, 4, 2, false]);
+        expect(format(audio)).toEqual([48000, 3, 2, false]);
         expect(samplesOf(audio)).toEqual(samplesOf(readWav(file)));
     });
 
@@ -160,11 +162,12 @@ describe("iterAudioChunks mixdown", () => {
     it.each(
         FORMATS,
     )("mixes two channels of %i-byte samples (float %s) by adding them at -3 dB as 32-bit floating point", async (sampleWidth, isFloat) => {
-        const stereo = Float64Array.from({ length: 600 }, (_, index) => (index % 2 === 0 ? 0.5 : -0.25));
+        // Levels with no zero bytes in any format, so every byte of a sample is read.
+        const stereo = Float64Array.from({ length: 600 }, (_, index) => (index % 2 === 0 ? 0.3 : -0.2));
+        const file = samplesWav(stereo, { channels: 2, sampleRate: 48000, sampleWidth, isFloat });
+        const [left, right] = samplesOf(readWav(file));
 
-        const audio = readWav(
-            await downmix(samplesWav(stereo, { channels: 2, sampleRate: 48000, sampleWidth, isFloat })),
-        );
+        const audio = readWav(await downmix(file));
 
         const samples = samplesOf(audio);
         expect([audio.sampleRate, audio.sampleWidth, audio.isFloat, audio.channels, samples.length]).toEqual([
@@ -174,7 +177,7 @@ describe("iterAudioChunks mixdown", () => {
             1,
             100,
         ]);
-        expect(maxAbs(samples.map((sample) => sample - 0.25 * Math.SQRT1_2))).toBeLessThanOrEqual(1e-7);
+        expect(maxAbs(samples.map((sample) => sample - (left + right) * Math.SQRT1_2))).toBeLessThanOrEqual(1e-7);
     });
 
     it.each(
@@ -212,17 +215,24 @@ describe("iterAudioChunks mixdown", () => {
         expect(samplesOf(audio)).toEqual(firstChannel(samplesOf(readWav(file)), 2));
     });
 
-    it("lets timers run while it resamples a long recording", async () => {
+    it.each([
+        ["", false],
+        [" in a browser, which has no setImmediate", true],
+    ])("lets timers run while it resamples a long recording%s", async (_, browser) => {
         // A minute at 192 kHz takes a few hundred milliseconds to resample, several times the pause interval.
         const file = samplesWav(noise(192000 * 60, 1), { channels: 1, sampleRate: 192000 });
         let ticks = 0;
         const timer = setInterval(() => {
             ticks += 1;
         }, 1);
+        if (browser) {
+            vi.stubGlobal("setImmediate", undefined);
+        }
 
         try {
             await iterAudioChunks(file, { maxChunkMs: 300_000 }).next();
         } finally {
+            vi.unstubAllGlobals();
             clearInterval(timer);
         }
 
