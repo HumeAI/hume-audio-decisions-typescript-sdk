@@ -23,10 +23,13 @@ export function writeAscii(data: Uint8Array, offset: number, text: string): void
     }
 }
 
-/** The big-endian integer in the up to 4 bytes from `offset` that lie within `data`. */
-export function uint32BE(data: Uint8Array, offset: number): number {
+/** The big-endian integer in the 4 bytes from `offset`, or undefined when they do not all lie within `data`. */
+export function uint32BE(data: Uint8Array, offset: number): number | undefined {
+    if (offset < 0 || offset + 4 > data.length) {
+        return undefined;
+    }
     let value = 0;
-    for (let index = offset; index < Math.min(offset + 4, data.length); index++) {
+    for (let index = offset; index < offset + 4; index++) {
         value = value * 256 + data[index];
     }
     return value;

@@ -76,14 +76,12 @@ export function parseMp3(data: Uint8Array): Mp3Audio {
     const reservoirBytes: number[] = [];
     const mainDataBytes: number[] = [];
     while (offset + 4 <= data.length && !startsTrailingTag(data, offset)) {
-        let header: Header;
-        try {
-            header = readHeader(data, offset);
-        } catch (error) {
+        const header = tryReadHeader(data, offset);
+        if (typeof header === "string") {
             // Players skip bytes after the last frame that are neither a frame nor a tag, such as
             // padding. When frames follow them, the bytes are damage instead.
             if (framesFollow(data, offset + 1, first)) {
-                throw error;
+                throw unsupported(header);
             }
             break;
         }
@@ -129,7 +127,8 @@ export function framesNeededBefore(mp3: Mp3Audio, frame: number): number {
 
 /** Builds an MP3 file holding frames `start` to `end` and none of the source's tags. */
 export function mp3Chunk(data: Uint8Array, mp3: Mp3Audio, start: number, end: number): Uint8Array {
-    return data.slice(mp3.offsets[start], mp3.offsets[end]);
+    // Copied rather than sliced, since a Buffer's slice is a view that would keep the whole recording.
+    return new Uint8Array(data.subarray(mp3.offsets[start], mp3.offsets[end]));
 }
 
 function framesHoldingDataOf(mp3: Mp3Audio, frame: number): number {
@@ -180,11 +179,20 @@ function skipId3v2(data: Uint8Array): number {
 }
 
 function readHeader(data: Uint8Array, offset: number): Header {
+    const header = tryReadHeader(data, offset);
+    if (typeof header === "string") {
+        throw unsupported(header);
+    }
+    return header;
+}
+
+/** The frame header at `offset`, or the reason there is none. */
+function tryReadHeader(data: Uint8Array, offset: number): Header | string {
     if (offset + 4 > data.length) {
-        throw unsupported("no MPEG audio frame");
+        return "no MPEG audio frame";
     }
     if (!hasFrameSync(data, offset)) {
-        throw unsupported(`no MPEG audio frame at byte ${offset}`);
+        return `no MPEG audio frame at byte ${offset}`;
     }
     const b1 = data[offset + 1];
     const b2 = data[offset + 2];
@@ -195,13 +203,13 @@ function readHeader(data: Uint8Array, offset: number): Header {
     const sampleRateIndex = (b2 >> 2) & 3;
     const sampleRates = SAMPLE_RATES[version];
     if (sampleRates === undefined || layer === 0 || bitrateIndex === 15 || sampleRateIndex === 3) {
-        throw unsupported(`invalid frame header at byte ${offset}`);
+        return `invalid frame header at byte ${offset}`;
     }
     if (layer !== LAYER_III) {
-        throw unsupported("MPEG layer I and II audio is not supported");
+        return "MPEG layer I and II audio is not supported";
     }
     if (bitrateIndex === 0) {
-        throw unsupported("free format MP3 files are not supported");
+        return "free format MP3 files are not supported";
     }
     const mpeg1 = version === MPEG1;
     const sampleRate = sampleRates[sampleRateIndex];
@@ -212,7 +220,7 @@ function readHeader(data: Uint8Array, offset: number): Header {
     // A protection bit of 0 means a 16-bit checksum follows the header.
     const sideInfoStart = b1 & 1 ? 4 : 6;
     if (length < sideInfoStart + sideInfoSize) {
-        throw unsupported(`invalid frame header at byte ${offset}`);
+        return `invalid frame header at byte ${offset}`;
     }
     return { version, sampleRate, length, sideInfoStart, sideInfoSize };
 }
@@ -222,31 +230,30 @@ function readHeader(data: Uint8Array, offset: number): Header {
  * the frame count it states. Undefined when the frame holds audio instead.
  */
 function readHeaderFrame(data: Uint8Array, offset: number, header: Header): HeaderFrame | undefined {
+    // Fields that would run past the end of the frame are absent, not read from the next frame.
+    const frame = data.subarray(offset, offset + header.length);
     // Encoders place the Xing tag after the side information as if the frame had no checksum.
-    const xing = offset + 4 + header.sideInfoSize;
-    if (!hasBytes(data, xing, "Xing") && !hasBytes(data, xing, "Info")) {
-        return hasBytes(data, offset + 36, "VBRI") ? NO_HEADER_FRAME : undefined;
+    const xing = 4 + header.sideInfoSize;
+    if (!hasBytes(frame, xing, "Xing") && !hasBytes(frame, xing, "Info")) {
+        return hasBytes(frame, 36, "VBRI") ? NO_HEADER_FRAME : undefined;
     }
-    const flags = uint32BE(data, xing + 4);
+    const flags = uint32BE(frame, xing + 4) ?? 0;
     let position = xing + 8;
     let statedFrames: number | undefined;
     if (flags & 1) {
-        statedFrames = uint32BE(data, position);
+        statedFrames = uint32BE(frame, position);
         position += 4;
     }
     // The byte count, table of contents and quality follow when their flags are set.
     position += (flags & 2 ? 4 : 0) + (flags & 4 ? 100 : 0) + (flags & 8 ? 4 : 0);
-    if (
-        position + 24 > offset + header.length ||
-        !LAME_TAG_ENCODERS.some((encoder) => hasBytes(data, position, encoder))
-    ) {
+    if (position + 24 > frame.length || !LAME_TAG_ENCODERS.some((encoder) => hasBytes(frame, position, encoder))) {
         return { leadingSamples: 0, trailingSamples: 0, statedFrames };
     }
     // Two 12-bit counts after the encoder's name and other settings: the samples the encoder added
     // before the recording, and after it. The decoder's own delay precedes both.
-    const b0 = data[position + 21];
-    const b1 = data[position + 22];
-    const b2 = data[position + 23];
+    const b0 = frame[position + 21];
+    const b1 = frame[position + 22];
+    const b2 = frame[position + 23];
     const delay = (b0 << 4) | (b1 >> 4);
     const padding = ((b1 & 0x0f) << 8) | b2;
     return {
@@ -271,10 +278,8 @@ function framesFollow(data: Uint8Array, offset: number, first: Header): boolean 
 }
 
 function matchingHeader(data: Uint8Array, offset: number, first: Header): Header | undefined {
-    let header: Header;
-    try {
-        header = readHeader(data, offset);
-    } catch {
+    const header = tryReadHeader(data, offset);
+    if (typeof header === "string") {
         return undefined;
     }
     return header.version === first.version && header.sampleRate === first.sampleRate ? header : undefined;
