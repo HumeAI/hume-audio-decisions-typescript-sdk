@@ -1,6 +1,6 @@
-# Hume Decisions TypeScript SDK
+# Hume Audio Decisions TypeScript SDK
 
-The official TypeScript client for the [Hume Decisions API](https://dev.hume.ai/decisions/docs/overview). The API answers questions about audio that you write in plain language. Send a recording with your questions, and each answer comes back as probabilities that estimate how human raters would respond, which your code can threshold, rank, or combine.
+The official TypeScript client for the [Hume Audio Decisions API](https://dev.hume.ai/decisions/docs/overview). The API answers questions about audio that you write in plain language. Send a recording with your questions, and each answer comes back as probabilities that estimate how human raters would respond, which your code can threshold, rank, or combine.
 
 The SDK provides clients for the decisions and run endpoints, TypeScript types for every question, answer, and response, and API key authentication. It ships CommonJS and ES module builds.
 
