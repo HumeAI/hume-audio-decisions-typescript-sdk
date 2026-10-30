@@ -173,17 +173,18 @@ for (const [questionId, answer] of Object.entries(response.answers)) {
 
 ## Counting input tokens
 
-`decisions.inputTokens` takes the same file and request as `decisions.create` and returns the number of input tokens the request would be billed for, without evaluating the audio or recording a run. Hume counts them from the audio duration, the context, and the questions.
+`decisions.inputTokens` counts the input tokens a decisions request would be billed for, from its context, its questions, and the duration of its audio. It takes no audio file, so you can count a request before sending it.
 
 ```typescript
 const count = await client.decisions.inputTokens({
-    file: { path: "test_call.wav", contentType: "audio/wav" },
-    request,
+    audioDurationMs: 135_000,
+    context: request.context,
+    questions: request.questions,
 });
-console.log(count.inputTokens);
+console.log(`${count.inputTokens} input tokens`);
 ```
 
-The request is validated the same way as a decisions request and fails with the same errors.
+`audioDurationMs` is the duration of the file the request would send. A duration over 5 minutes is rejected with `audio_too_long`, so count a long recording one chunk at a time; each chunk is billed as its own request.
 
 ## Long recordings
 
