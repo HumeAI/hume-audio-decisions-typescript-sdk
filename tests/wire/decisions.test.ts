@@ -9,10 +9,29 @@ describe("DecisionsClient", () => {
         const server = mockServerPool.createServer();
         const client = new DecisionsClient({ maxRetries: 0, apiKey: "test", environment: server.baseUrl });
         const rawRequestBody = {
-            audio_duration_ms: 1,
-            questions: { whispered: { type: "noul", instructions: "Is the voice whispering?" } },
+            audio_duration_ms: 135000,
+            context:
+                "A simulated test call in which a voice AI agent helps a caller reschedule an appointment. Both voices are synthetic, and the agent speaks first.",
+            questions: {
+                talks_over_caller: { type: "noul", instructions: "Does the agent talk over the caller?" },
+                agent_tone: {
+                    type: "choice",
+                    instructions: "Which best describes the tone of the agent?",
+                    criteria: [
+                        { name: "warm", description: "Warm and friendly toward the caller" },
+                        { name: "neutral", description: "Polite but impersonal" },
+                        { name: "curt", description: "Short or dismissive with the caller" },
+                    ],
+                },
+                agent_naturalness: {
+                    type: "score",
+                    instructions: "How natural does the agent sound?",
+                    criteria: ["Not at all", "2", "3", "4", "Extremely"],
+                },
+                agent_glitches: { type: "moment", instructions: "Where does the agent glitch, slur or sound robotic?" },
+            },
         };
-        const rawResponseBody = { input_tokens: 1 };
+        const rawResponseBody = { input_tokens: 2150 };
 
         server
             .mockEndpoint()
@@ -24,16 +43,45 @@ describe("DecisionsClient", () => {
             .build();
 
         const response = await client.decisions.inputTokens({
-            audioDurationMs: 1,
+            audioDurationMs: 135000,
+            context:
+                "A simulated test call in which a voice AI agent helps a caller reschedule an appointment. Both voices are synthetic, and the agent speaks first.",
             questions: {
-                whispered: {
+                talks_over_caller: {
                     type: "noul",
-                    instructions: "Is the voice whispering?",
+                    instructions: "Does the agent talk over the caller?",
+                },
+                agent_tone: {
+                    type: "choice",
+                    instructions: "Which best describes the tone of the agent?",
+                    criteria: [
+                        {
+                            name: "warm",
+                            description: "Warm and friendly toward the caller",
+                        },
+                        {
+                            name: "neutral",
+                            description: "Polite but impersonal",
+                        },
+                        {
+                            name: "curt",
+                            description: "Short or dismissive with the caller",
+                        },
+                    ],
+                },
+                agent_naturalness: {
+                    type: "score",
+                    instructions: "How natural does the agent sound?",
+                    criteria: ["Not at all", "2", "3", "4", "Extremely"],
+                },
+                agent_glitches: {
+                    type: "moment",
+                    instructions: "Where does the agent glitch, slur or sound robotic?",
                 },
             },
         });
         expect(response).toEqual({
-            inputTokens: 1,
+            inputTokens: 2150,
         });
     });
 
