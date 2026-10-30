@@ -11,7 +11,7 @@ export interface Error_ {
     code: Decisions.ErrorCode;
     /** A description of the problem for a person. Its wording may change, so switch on `code`. */
     message: string;
-    /** Where the error was found: a JSON Pointer into the `request` part, or the name of a part or header. For a field that is missing, unknown or of the wrong type, it can name an enclosing object, such as the question, instead of the field. Omitted when the error has no narrower location than the whole request. */
+    /** Where the error was found: a JSON Pointer into the `request` part or the input tokens body, or the name of a part or header. For a field that is missing, unknown or of the wrong type, it can name an enclosing object, such as the question, instead of the field. Omitted when the error has no narrower location than the whole request. */
     param?: string;
     /** The ID of the request that failed. Quote it when contacting support. */
     requestId: string;
