@@ -16,7 +16,8 @@ export interface DownmixOptions {
      * How a WAV file is mixed down before it is sent: "mix", the default, mixes it the way the API
      * does, so the model hears the same audio; "first_channel" keeps only the first channel; and
      * "none" sends it as it is. MP3 files, and WAV files the SDK cannot read, are sent as they are.
-     * `iterAudioChunks` in `@humeai/decisions/audio-helpers` describes each.
+     * Unless it is "none", `create` reads the whole file into memory before sending it, since it must
+     * read the file to tell whether it is a WAV file. `iterAudioChunks` in `@humeai/decisions/audio-helpers` describes each.
      */
     downmixStrategy?: DownmixStrategy;
 }
