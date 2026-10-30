@@ -72,18 +72,20 @@ function float32Spacing(value: number): number {
     return view.getFloat32(0) - rounded;
 }
 
+/** The samples ffmpeg writes in 32-bit floating point, the output format of the API's conversion. */
 function ffmpeg(file: Uint8Array, ...options: string[]): Float64Array {
     // ffmpeg's x86 code reads one more filter tap than its C code when it interpolates between filter
-    // phases, so its output at such rates depends on the CPU. Clearing the CPU flags runs the C code.
+    // phases, so its output at such rates depends on the CPU. Clearing the CPU flags runs the C code,
+    // which the SDK matches, so at those rates the API on an x86 server can hear slightly different audio.
     const result = spawnSync(
         "ffmpeg",
-        ["-nostdin", "-v", "error", "-cpuflags", "0", "-i", "-", ...options, "-f", "f64le", "-"],
+        ["-nostdin", "-v", "error", "-cpuflags", "0", "-i", "-", ...options, "-f", "f32le", "-"],
         { input: file, maxBuffer: 1 << 28 },
     );
     if (result.error !== undefined || result.status !== 0) {
         throw new Error(`ffmpeg failed: ${result.error ?? result.stderr.toString()}`);
     }
-    return new Float64Array(new Uint8Array(result.stdout).buffer);
+    return Float64Array.from(new Float32Array(new Uint8Array(result.stdout).buffer));
 }
 
 describe("iterAudioChunks mixdown", () => {
