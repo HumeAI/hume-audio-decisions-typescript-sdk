@@ -39,6 +39,8 @@ interface HeaderFrame {
     statedFrames: number | undefined;
 }
 
+const NO_HEADER_FRAME: HeaderFrame = { leadingSamples: 0, trailingSamples: 0, statedFrames: undefined };
+
 export interface Mp3Audio {
     readonly sampleRate: number;
     readonly samplesPerFrame: number;
@@ -48,17 +50,16 @@ export interface Mp3Audio {
     // many bytes of audio data, its own or later frames', it holds itself.
     readonly reservoirBytes: readonly number[];
     readonly mainDataBytes: readonly number[];
-    // Samples decoded from the frames before the recording starts and after it ends, which players
-    // leave out when a LAME tag states them. Both are 0 without one.
+    // Samples decoded from the frames before the recording starts, which players leave out when a LAME
+    // tag states them. 0 without one.
     readonly leadingSamples: number;
-    readonly trailingSamples: number;
     readonly frameCount: number;
     // The sample after the recording's last, counted from the start of the first frame.
     readonly endSample: number;
 }
 
 export function isMp3(data: Uint8Array): boolean {
-    return hasBytes(data, 0, "ID3") || (data.length >= 2 && data[0] === 0xff && (data[1] & 0xe0) === 0xe0);
+    return hasBytes(data, 0, "ID3") || hasFrameSync(data, 0);
 }
 
 export function parseMp3(data: Uint8Array): Mp3Audio {
@@ -99,10 +100,7 @@ export function parseMp3(data: Uint8Array): Mp3Audio {
     }
     offsets.push(offset);
     const frameCount = offsets.length - 1;
-    const { leadingSamples, statedFrames } = headerFrame ?? { leadingSamples: 0, statedFrames: undefined };
-    // The samples added at the end close the frames the header counts. A file cut short has lost
-    // them, and players then leave nothing out at the end.
-    const trailingSamples = headerFrame !== undefined && statedFrames === frameCount ? headerFrame.trailingSamples : 0;
+    const { leadingSamples, trailingSamples, statedFrames } = headerFrame ?? NO_HEADER_FRAME;
     const samplesPerFrame = first.version === MPEG1 ? 1152 : 576;
     return {
         sampleRate: first.sampleRate,
@@ -111,9 +109,10 @@ export function parseMp3(data: Uint8Array): Mp3Audio {
         reservoirBytes,
         mainDataBytes,
         leadingSamples,
-        trailingSamples,
         frameCount,
-        endSample: frameCount * samplesPerFrame - trailingSamples,
+        // The samples added at the end close the frames the header counts. A file cut short has lost
+        // them, and players then leave nothing out at the end.
+        endSample: frameCount * samplesPerFrame - (statedFrames === frameCount ? trailingSamples : 0),
     };
 }
 
@@ -128,8 +127,8 @@ export function framesNeededBefore(mp3: Mp3Audio, frame: number): number {
 }
 
 /** Builds an MP3 file holding frames `start` to `end` and none of the source's tags. */
-export function mp3Chunk(data: Uint8Array, audio: Mp3Audio, start: number, end: number): Uint8Array {
-    return data.slice(audio.offsets[start], audio.offsets[end]);
+export function mp3Chunk(data: Uint8Array, mp3: Mp3Audio, start: number, end: number): Uint8Array {
+    return data.slice(mp3.offsets[start], mp3.offsets[end]);
 }
 
 function framesHoldingDataOf(mp3: Mp3Audio, frame: number): number {
@@ -145,6 +144,10 @@ function framesHoldingDataOf(mp3: Mp3Audio, frame: number): number {
     // Decoders such as ffmpeg and mpg123 do not keep the audio data of the first frame they read
     // when they cannot decode it, so the data must start after the chunk's first frame.
     return Math.min(count + 1, frame);
+}
+
+function hasFrameSync(data: Uint8Array, offset: number): boolean {
+    return offset + 2 <= data.length && data[offset] === 0xff && (data[offset + 1] & 0xe0) === 0xe0;
 }
 
 function startsTrailingTag(data: Uint8Array, offset: number): boolean {
@@ -179,13 +182,12 @@ function readHeader(data: Uint8Array, offset: number): Header {
     if (offset + 4 > data.length) {
         throw unsupported("no MPEG audio frame");
     }
-    const b0 = data[offset];
+    if (!hasFrameSync(data, offset)) {
+        throw unsupported(`no MPEG audio frame at byte ${offset}`);
+    }
     const b1 = data[offset + 1];
     const b2 = data[offset + 2];
     const b3 = data[offset + 3];
-    if (b0 !== 0xff || (b1 & 0xe0) !== 0xe0) {
-        throw unsupported(`no MPEG audio frame at byte ${offset}`);
-    }
     const version = (b1 >> 3) & 3;
     const layer = (b1 >> 1) & 3;
     const bitrateIndex = b2 >> 4;
@@ -222,9 +224,7 @@ function readHeaderFrame(data: Uint8Array, offset: number, header: Header): Head
     // Encoders place the Xing tag after the side information as if the frame had no checksum.
     const xing = offset + 4 + header.sideInfoSize;
     if (!hasBytes(data, xing, "Xing") && !hasBytes(data, xing, "Info")) {
-        return hasBytes(data, offset + 36, "VBRI")
-            ? { leadingSamples: 0, trailingSamples: 0, statedFrames: undefined }
-            : undefined;
+        return hasBytes(data, offset + 36, "VBRI") ? NO_HEADER_FRAME : undefined;
     }
     const flags = uint32BE(data, xing + 4);
     let position = xing + 8;

@@ -4,47 +4,34 @@ import { BadRequestError } from "../api/errors/BadRequestError.js";
 import type { DecisionsUpload } from "../api/resources/decisions/client/requests/DecisionsUpload.js";
 import type { DecisionsRequest } from "../api/types/DecisionsRequest.js";
 import type { DecisionsResponse } from "../api/types/DecisionsResponse.js";
-import type { Uploadable } from "../core/file/index.js";
 import { DecisionsError } from "../errors/DecisionsError.js";
-import { type ChunkOptions, checkChunkOptions, type iterAudioChunks, planAudioChunks } from "./chunks.js";
-import { checkFile, readFile } from "./files.js";
-import { checkInteger } from "./integers.js";
+import { checkInteger } from "./checks.js";
+import { type iterAudioChunks, type PlannedRecording, prepareChunks } from "./chunks.js";
+import type { DownmixOptions } from "./files.js";
 
 export type ChunkStatus = "succeeded" | "failed" | "not_attempted";
 
 /** The outcome of one chunk's request. */
 export class ChunkResult {
-    /** Position of the chunk in the recording, starting at 0. */
-    public readonly index: number;
-    /**
-     * Where the chunk starts in the recording, in milliseconds. A moment's `audio_start_ms` and
-     * `audio_end_ms` are measured from the start of the chunk, so add this to place the moment in the
-     * recording. The first chunk of an MP3 file can start a few tens of milliseconds before 0.
-     */
-    public readonly startMs: number;
-    /** Where the chunk ends in the recording, in milliseconds. */
-    public readonly endMs: number;
-    /** The API's response for the chunk, unchanged, when the request succeeded. */
-    public readonly response: DecisionsResponse | undefined;
-    /**
-     * The error the request threw, when it failed. Undefined when the request succeeded or was never
-     * sent.
-     */
-    public readonly error: DecisionsError | undefined;
-
     constructor(
-        index: number,
-        startMs: number,
-        endMs: number,
-        response: DecisionsResponse | undefined,
-        error: DecisionsError | undefined,
-    ) {
-        this.index = index;
-        this.startMs = startMs;
-        this.endMs = endMs;
-        this.response = response;
-        this.error = error;
-    }
+        /** Position of the chunk in the recording, starting at 0. */
+        public readonly index: number,
+        /**
+         * Where the chunk starts in the recording, in milliseconds. A moment's `audioStartMs` and
+         * `audioEndMs` are measured from the start of the chunk, so add this to place the moment in the
+         * recording. The first chunk of an MP3 file can start a few tens of milliseconds before 0.
+         */
+        public readonly startMs: number,
+        /** Where the chunk ends in the recording, in milliseconds. */
+        public readonly endMs: number,
+        /** The API's response for the chunk, unchanged, when the request succeeded. */
+        public readonly response: DecisionsResponse | undefined,
+        /**
+         * The error the request threw, when it failed. Undefined when the request succeeded or was never
+         * sent.
+         */
+        public readonly error: DecisionsError | undefined,
+    ) {}
 
     public get status(): ChunkStatus {
         if (this.response !== undefined) {
@@ -103,31 +90,29 @@ export class ChunkedDecisionsResult {
     }
 }
 
+type Create = (upload: DecisionsUpload & DownmixOptions) => Promise<DecisionsResponse>;
+
 /**
  * Sends each chunk of `upload.file` with `create`, as `iterCreateChunked` describes. The options are
  * checked by this call, and the file when iteration starts.
  */
 export function sendChunks(
-    create: (upload: DecisionsUpload) => Promise<DecisionsResponse>,
+    create: Create,
     { request, file, ...options }: DecisionsUpload & iterAudioChunks.Options,
     signal: AbortSignal | undefined,
 ): AsyncGenerator<ChunkResult, void, undefined> {
-    const checked = checkChunkOptions(options);
-    checkFile(file);
-    return send(create, request, file, checked, signal);
+    return send(create, request, prepareChunks(file, options), signal);
 }
 
 async function* send(
-    create: (upload: DecisionsUpload) => Promise<DecisionsResponse>,
+    create: Create,
     request: DecisionsRequest,
-    file: Uploadable,
-    options: ChunkOptions,
+    planRecording: (signal?: AbortSignal) => Promise<PlannedRecording>,
     signal: AbortSignal | undefined,
 ): AsyncGenerator<ChunkResult, void, undefined> {
     // Planning reads and checks the whole file, so a file that cannot be split is rejected before
     // any request is sent.
-    const { data, filename, contentType } = await readFile(file);
-    const chunks = await planAudioChunks(data, options, signal);
+    const { filename, contentType, chunks } = await planRecording(signal);
     const rule = new StopRule();
     // A chunk's data is copied only when it is sent, so the chunks after a stop cost nothing.
     for (const chunk of chunks) {
@@ -135,7 +120,12 @@ async function* send(
         let error: DecisionsError | undefined;
         if (!rule.stopped) {
             try {
-                response = await create({ request, file: { data: chunk.build(), filename, contentType } });
+                response = await create({
+                    request,
+                    file: { data: chunk.build(), filename, contentType },
+                    // The chunks were mixed down when they were planned.
+                    downmixStrategy: "none",
+                });
             } catch (raised) {
                 // An abort ends the job rather than failing one chunk. Anything other than a
                 // DecisionsError did not come from the request, so it is not a chunk's outcome either.
@@ -170,19 +160,18 @@ class StopRule {
     private anySucceeded = false;
 
     public record(chunk: ChunkResult): void {
-        if (chunk.error !== undefined && !failsOnlyThisChunk(chunk.error, this.anySucceeded)) {
+        // A decode failure can come from one damaged stretch of the recording, but until some chunk has
+        // decoded, the whole file is the likelier cause and every remaining chunk would fail the same
+        // way. Any other error, including codes the API adds later, is assumed to fail every remaining
+        // chunk, so sending them would only spend requests. The generated client has already retried
+        // rate limits and server errors before throwing.
+        const failsAlone =
+            this.anySucceeded &&
+            chunk.error instanceof BadRequestError &&
+            chunk.error.body.code === "audio_decode_failed";
+        if (chunk.error !== undefined && !failsAlone) {
             this.stopped = true;
         }
-        this.anySucceeded = this.anySucceeded || chunk.response !== undefined;
+        this.anySucceeded ||= chunk.response !== undefined;
     }
-}
-
-function failsOnlyThisChunk(error: DecisionsError, afterSuccess: boolean): boolean {
-    // A decode failure can come from one damaged stretch of the recording, but until some chunk has
-    // decoded, the whole file is the likelier cause and every remaining chunk would fail the same way.
-    // Any other error, including codes the API adds later, is assumed to fail every remaining chunk,
-    // so sending them would only spend requests. The generated client has already retried rate limits
-    // and server errors before throwing.
-    const decodeFailed = error instanceof BadRequestError && error.body.code === "audio_decode_failed";
-    return decodeFailed && afterSuccess;
 }

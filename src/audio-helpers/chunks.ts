@@ -1,9 +1,10 @@
 // Maintained by hand and listed in .fernignore, so SDK regeneration leaves it in place.
 
 import type { Uploadable } from "../core/file/index.js";
+import { checkChoice, checkInteger } from "./checks.js";
 import { checkDownmixStrategy, type DownmixStrategy, downmixWav } from "./downmix.js";
 import { checkFile, readFile } from "./files.js";
-import { ceilDiv, checkInteger, describe, floorDiv, roundDiv } from "./integers.js";
+import { ceilDiv, floorDiv, roundDiv } from "./integers.js";
 import { framesNeededBefore, isMp3, type Mp3Audio, mp3Chunk, parseMp3 } from "./mp3.js";
 import { isWav, parseWav, type WavAudio, wavChunk } from "./wav.js";
 
@@ -17,9 +18,9 @@ const MAX_REQUEST_BYTES = 25_000_000;
 // common request.
 const MAX_CHUNK_BYTES = 24_000_000;
 
-export type ChunkSplit = "even" | "fixed";
+const SPLITS = ["even", "fixed"] as const;
 
-const SPLITS: readonly unknown[] = ["even", "fixed"];
+export type ChunkSplit = (typeof SPLITS)[number];
 
 /** One chunk of a longer recording, a complete audio file to send to the Decisions API on its own. */
 export interface AudioChunk {
@@ -81,7 +82,7 @@ export declare namespace iterAudioChunks {
     }
 }
 
-export interface ChunkOptions {
+interface ChunkOptions {
     readonly maxChunkMs: number;
     readonly startMs: number;
     readonly endMs: number | undefined;
@@ -90,12 +91,22 @@ export interface ChunkOptions {
 }
 
 /** A chunk's place in the recording, with its data left to be copied when it is needed. */
-export interface PlannedChunk {
+interface PlannedChunk {
     readonly index: number;
     readonly startMs: number;
     readonly endMs: number;
     readonly build: () => Uint8Array;
 }
+
+/** A recording's chunks, with the filename and content type its upload would carry. */
+export interface PlannedRecording {
+    readonly filename: string | undefined;
+    readonly contentType: string | undefined;
+    readonly chunks: Iterable<PlannedChunk>;
+}
+
+// Positions are samples in a WAV file and frames in an MP3 file.
+type Cut = [start: number, end: number];
 
 /**
  * Splits a recording, or part of one, into chunks short enough for the Decisions API.
@@ -177,28 +188,44 @@ export function iterAudioChunks(
     file: Uploadable,
     options: iterAudioChunks.Options,
 ): AsyncGenerator<AudioChunk, void, undefined> {
-    const checked = checkChunkOptions(options);
-    checkFile(file);
-    return produceChunks(file, checked);
+    return produceChunks(prepareChunks(file, options));
 }
 
-async function* produceChunks(file: Uploadable, options: ChunkOptions): AsyncGenerator<AudioChunk, void, undefined> {
-    const { data } = await readFile(file);
-    for (const chunk of await planAudioChunks(data, options)) {
+async function* produceChunks(
+    planRecording: () => Promise<PlannedRecording>,
+): AsyncGenerator<AudioChunk, void, undefined> {
+    for (const chunk of (await planRecording()).chunks) {
         yield { index: chunk.index, startMs: chunk.startMs, endMs: chunk.endMs, data: chunk.build() };
     }
 }
 
-export function checkChunkOptions({
+/**
+ * Checks `options` and `file`, and returns a function that reads the file, mixes it down and plans
+ * the chunks `iterAudioChunks` gives, without copying any chunk's data. The function rejects with a
+ * DecisionsError if `signal` aborts during the mixdown.
+ */
+export function prepareChunks(
+    file: Uploadable,
+    options: iterAudioChunks.Options,
+): (signal?: AbortSignal) => Promise<PlannedRecording> {
+    const checked = checkChunkOptions(options);
+    checkFile(file);
+    // A generator that read the file itself would keep the recording in memory for the whole job, even
+    // after a WAV file is mixed down into a smaller copy.
+    return async (signal) => {
+        const { data, filename, contentType } = await readFile(file);
+        return { filename, contentType, chunks: await planAudioChunks(data, checked, signal) };
+    };
+}
+
+function checkChunkOptions({
     maxChunkMs,
     startMs,
     endMs,
     split = "even",
     downmixStrategy,
 }: iterAudioChunks.Options): ChunkOptions {
-    if (SPLITS.indexOf(split) < 0) {
-        throw new RangeError(`split must be "even" or "fixed", got ${describe(split)}.`);
-    }
+    checkChoice("split", split, SPLITS);
     const downmix = checkDownmixStrategy(downmixStrategy);
     checkInteger("maxChunkMs", maxChunkMs);
     if (maxChunkMs < 1 || maxChunkMs > MAX_CHUNK_MS) {
@@ -217,68 +244,66 @@ export function checkChunkOptions({
     return { maxChunkMs, startMs: start, endMs, split, downmixStrategy: downmix };
 }
 
-/**
- * Mixes down and plans the chunks `iterAudioChunks` gives, without copying any chunk's data. Rejects
- * with a DecisionsError if `signal` aborts during the mixdown.
- */
-export async function planAudioChunks(
+async function planAudioChunks(
     data: Uint8Array,
     options: ChunkOptions,
-    signal?: AbortSignal,
+    signal: AbortSignal | undefined,
 ): Promise<Iterable<PlannedChunk>> {
-    const { maxChunkMs, startMs, endMs, split } = options;
     if (isWav(data)) {
         const mixed = await downmixWav(data, parseWav(data), options.downmixStrategy, signal);
-        return wavChunks(mixed.data, mixed.wav, maxChunkMs, startMs, endMs, split);
+        return wavChunks(mixed.data, mixed.wav, options);
     }
     if (isMp3(data)) {
-        return mp3Chunks(data, parseMp3(data), maxChunkMs, startMs, endMs, split);
+        return mp3Chunks(data, parseMp3(data), options);
     }
     throw new Error("Unsupported audio format. Only MP3 and WAV files can be split into chunks.");
 }
 
-function checkRange(durationMs: number, startMs: number, endMs: number | undefined): void {
+/** The first and last positions of the range `startMs` and `endMs` select from `length` positions. */
+function selectRange(
+    length: number,
+    msAt: (position: number) => number,
+    positionAt: (ms: number) => number,
+    startMs: number,
+    endMs: number | undefined,
+): Cut {
+    if (length === 0) {
+        throw new Error("The audio is empty.");
+    }
     // The longest range allowed ends at the duration that the final chunk reports.
     // A recording shorter than half a millisecond has a duration of 0 ms but still starts at 0.
+    const durationMs = msAt(length);
     if (startMs > 0 && startMs >= durationMs) {
         throw new RangeError(`startMs must be less than the recording's duration of ${durationMs} ms, got ${startMs}.`);
     }
     if (endMs !== undefined && endMs > durationMs) {
         throw new RangeError(`endMs must not exceed the recording's duration of ${durationMs} ms, got ${endMs}.`);
     }
+    // The duration is rounded to the millisecond, so it can fall short of the final position. An MP3
+    // recording can start and end partway through a frame, so its first and last frames are kept whole.
+    const first = startMs === 0 ? 0 : positionAt(startMs);
+    const last = endMs === undefined || endMs >= durationMs ? length : Math.min(positionAt(endMs), length);
+    return [first, last];
 }
 
 function wavChunks(
     data: Uint8Array,
     wav: WavAudio,
-    maxChunkMs: number,
-    startMs: number,
-    endMs: number | undefined,
-    split: ChunkSplit,
+    { maxChunkMs, startMs, endMs, split }: ChunkOptions,
 ): Iterable<PlannedChunk> {
-    if (wav.sampleCount === 0) {
-        throw new Error("The audio is empty.");
-    }
-    const durationMs = toMs(wav.sampleCount, wav.sampleRate);
-    checkRange(durationMs, startMs, endMs);
-    // The duration is rounded to the millisecond, so it can fall short of the final sample.
-    const last =
-        endMs === undefined || endMs >= durationMs
-            ? wav.sampleCount
-            : Math.min(toSample(endMs, wav.sampleRate), wav.sampleCount);
-    const first = toSample(startMs, wav.sampleRate);
-    let cuts: Iterable<[number, number]>;
+    const msAt = (sample: number) => toMs(sample, wav.sampleRate);
+    const [first, last] = selectRange(wav.sampleCount, msAt, (ms) => toSample(ms, wav.sampleRate), startMs, endMs);
+    // When maxChunkMs is not a whole number of samples, a chunk can be up to one sample longer.
+    const longest = ceilDiv(maxChunkMs * wav.sampleRate, 1000);
+    const fitting = wavSamplesThatFit(wav);
+    let cuts: Iterable<Cut>;
     if (split === "even") {
-        cuts = evenWavCuts(wav, maxChunkMs, first, last);
+        cuts = evenWavCuts(first, last, Math.min(longest, fitting));
     } else {
-        checkWavSize(wav, maxChunkMs, last - first);
+        checkWavSize(wav, Math.min(longest, last - first), fitting);
         cuts = fixedWavCuts(wav, maxChunkMs, startMs, first, last);
     }
-    return plan(
-        cuts,
-        (sample) => toMs(sample, wav.sampleRate),
-        (start, end) => wavChunk(data, wav, start, end),
-    );
+    return plan(cuts, msAt, (start, end) => wavChunk(data, wav, start, end));
 }
 
 function wavSamplesThatFit(wav: WavAudio): number {
@@ -288,9 +313,8 @@ function wavSamplesThatFit(wav: WavAudio): number {
     return floorDiv(MAX_CHUNK_BYTES - headerBytes, wav.frameBytes);
 }
 
-function checkWavSize(wav: WavAudio, maxChunkMs: number, rangeSamples: number): void {
-    const fitting = wavSamplesThatFit(wav);
-    if (Math.min(ceilDiv(maxChunkMs * wav.sampleRate, 1000), rangeSamples) <= fitting) {
+function checkWavSize(wav: WavAudio, longest: number, fitting: number): void {
+    if (longest <= fitting) {
         return;
     }
     const fittingMs = floorDiv(fitting * 1000, wav.sampleRate);
@@ -305,16 +329,10 @@ function checkWavSize(wav: WavAudio, maxChunkMs: number, rangeSamples: number): 
 function mp3Chunks(
     data: Uint8Array,
     mp3: Mp3Audio,
-    maxChunkMs: number,
-    startMs: number,
-    endMs: number | undefined,
-    split: ChunkSplit,
+    { maxChunkMs, startMs, endMs, split }: ChunkOptions,
 ): Iterable<PlannedChunk> {
-    if (mp3.frameCount === 0) {
-        throw new Error("The audio is empty.");
-    }
-    const durationMs = mp3TimeMs(mp3, mp3.frameCount);
-    checkRange(durationMs, startMs, endMs);
+    const msAt = (frame: number) => mp3TimeMs(mp3, frame);
+    const [first, last] = selectRange(mp3.frameCount, msAt, (ms) => frameAt(mp3, ms), startMs, endMs);
     // Rounding down keeps every chunk within maxChunkMs, so a maxChunkMs of 300000 stays within the
     // API's limit.
     const framesPerChunk = floorDiv(maxChunkMs * mp3.sampleRate, 1000 * mp3.samplesPerFrame);
@@ -322,12 +340,6 @@ function mp3Chunks(
     if (framesPerChunk === 0) {
         throw new RangeError(`maxChunkMs must be at least ${frameMs} ms, the length of one frame of this MP3 file.`);
     }
-    // Times given by the caller are often ones a chunk reported, which are rounded to the
-    // millisecond, so they move to the nearest frame boundary rather than the one before. The start
-    // and end of the recording can fall partway through a frame, so they keep that whole frame.
-    const first = startMs === 0 ? 0 : frameAt(mp3, startMs);
-    const last =
-        endMs === undefined || endMs >= durationMs ? mp3.frameCount : Math.min(frameAt(mp3, endMs), mp3.frameCount);
     if (last <= first) {
         throw new RangeError(
             `startMs and endMs must be at least ${frameMs} ms apart, the length of one frame of this MP3 file.`,
@@ -348,14 +360,13 @@ function mp3Chunks(
                 " at least one new frame.",
         );
     }
-    return plan(
-        split === "even" ? evenMp3Cuts(mp3, filled, framesPerChunk, first, last) : filled,
-        (frame) => mp3TimeMs(mp3, frame),
-        (start, end) => mp3Chunk(data, mp3, start, end),
-    );
+    const cuts = split === "even" ? evenMp3Cuts(mp3, filled, framesPerChunk, first, last) : filled;
+    return plan(cuts, msAt, (start, end) => mp3Chunk(data, mp3, start, end));
 }
 
 function frameAt(mp3: Mp3Audio, ms: number): number {
+    // Times given by the caller are often ones a chunk reported, which are rounded to the
+    // millisecond, so they move to the nearest frame boundary rather than the one before.
     return roundDiv(ms * mp3.sampleRate + 1000 * mp3.leadingSamples, 1000 * mp3.samplesPerFrame);
 }
 
@@ -370,13 +381,7 @@ function mp3TimeMs(mp3: Mp3Audio, frame: number): number {
     return toMs(Math.min(frame * mp3.samplesPerFrame, mp3.endSample) - mp3.leadingSamples, mp3.sampleRate);
 }
 
-function evenMp3Cuts(
-    mp3: Mp3Audio,
-    filled: [number, number][],
-    framesPerChunk: number,
-    first: number,
-    last: number,
-): [number, number][] {
+function evenMp3Cuts(mp3: Mp3Audio, filled: Cut[], framesPerChunk: number, first: number, last: number): Cut[] {
     // Filling every chunk gives the fewest chunks but can leave a short last chunk. The shortest
     // chunk length that needs no more chunks than that shares the frames out evenly instead.
     let cuts = filled;
@@ -396,13 +401,8 @@ function evenMp3Cuts(
 }
 
 /** Cuts chunks of `framesPerChunk` frames, or undefined when a chunk cannot hold a new frame. */
-function fillMp3Chunks(
-    mp3: Mp3Audio,
-    framesPerChunk: number,
-    first: number,
-    last: number,
-): [number, number][] | undefined {
-    const cuts: [number, number][] = [];
+function fillMp3Chunks(mp3: Mp3Audio, framesPerChunk: number, first: number, last: number): Cut[] | undefined {
+    const cuts: Cut[] = [];
     let next = first;
     while (next < last) {
         // Without the frames before it, the first new frame decodes wrongly. They repeat the end of
@@ -418,11 +418,9 @@ function fillMp3Chunks(
     return cuts;
 }
 
-function* evenWavCuts(wav: WavAudio, maxChunkMs: number, first: number, last: number): Generator<[number, number]> {
-    // When maxChunkMs is not a whole number of samples, a chunk can be up to one sample longer.
-    const most = Math.min(ceilDiv(maxChunkMs * wav.sampleRate, 1000), wavSamplesThatFit(wav));
+function* evenWavCuts(first: number, last: number, longest: number): Generator<Cut> {
     const length = last - first;
-    const count = ceilDiv(length, most);
+    const count = ceilDiv(length, longest);
     // Chunk i starts at first + floor(length * i / count). That product can pass
     // Number.MAX_SAFE_INTEGER, so the cuts are stepped by the quotient and carry the remainder.
     const step = floorDiv(length, count);
@@ -447,7 +445,7 @@ function* fixedWavCuts(
     startMs: number,
     first: number,
     last: number,
-): Generator<[number, number]> {
+): Generator<Cut> {
     let start = first;
     let index = 0;
     while (start < last) {
@@ -461,14 +459,13 @@ function* fixedWavCuts(
 }
 
 function* plan(
-    cuts: Iterable<[number, number]>,
-    toMs: (position: number) => number,
+    cuts: Iterable<Cut>,
+    msAt: (position: number) => number,
     build: (start: number, end: number) => Uint8Array,
 ): Generator<PlannedChunk> {
-    // Cuts are in samples for WAV and frames for MP3.
     let index = 0;
     for (const [start, end] of cuts) {
-        yield { index, startMs: toMs(start), endMs: toMs(end), build: () => build(start, end) };
+        yield { index, startMs: msAt(start), endMs: msAt(end), build: () => build(start, end) };
         index += 1;
     }
 }

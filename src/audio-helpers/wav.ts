@@ -18,7 +18,7 @@ const SAMPLE_WIDTHS: { readonly [tag: number]: readonly number[] | undefined } =
 const EXTENSIBLE_FMT_BYTES = 40;
 
 // Chunks are at least 1 ms long, so at this rate every chunk holds at least one sample.
-export const MIN_SAMPLE_RATE = 1000;
+const MIN_SAMPLE_RATE = 1000;
 // The resampling filter grows with the sample rate, so without a limit a few bytes of header could
 // demand gigabytes. No recording format in common use goes above this rate.
 const MAX_SAMPLE_RATE = 768_000;
@@ -37,13 +37,7 @@ export interface WavAudio {
     readonly frameBytes: number;
 }
 
-interface Format {
-    fmt: Uint8Array;
-    channels: number;
-    sampleRate: number;
-    sampleWidth: number;
-    isFloat: boolean;
-}
+type Format = Omit<WavAudio, "dataStart" | "sampleCount">;
 
 export function isWav(data: Uint8Array): boolean {
     return hasBytes(data, 0, "RIFF") || hasBytes(data, 0, "RF64");
@@ -80,17 +74,7 @@ export function parseWav(data: Uint8Array): WavAudio {
             const unclosed = size === 0 && 8 + riffSize <= offset;
             // A file cut short is read as far as it goes, up to its last whole sample.
             size = unclosed || size === UNKNOWN_SIZE ? available : Math.min(size, available);
-            const frameBytes = format.sampleWidth * format.channels;
-            return {
-                fmt: format.fmt,
-                channels: format.channels,
-                sampleRate: format.sampleRate,
-                sampleWidth: format.sampleWidth,
-                isFloat: format.isFloat,
-                dataStart: offset,
-                sampleCount: Math.floor(size / frameBytes),
-                frameBytes,
-            };
+            return { ...format, dataStart: offset, sampleCount: Math.floor(size / format.frameBytes) };
         }
         if (isFmt) {
             format = parseFormat(data.subarray(offset, offset + Math.min(size, EXTENSIBLE_FMT_BYTES)));
@@ -129,20 +113,20 @@ export function samplesWav(
 }
 
 /** Builds a WAV file holding samples `start` to `end` and none of the source's other chunks. */
-export function wavChunk(data: Uint8Array, audio: WavAudio, start: number, end: number): Uint8Array {
-    const first = audio.dataStart + start * audio.frameBytes;
-    const size = (end - start) * audio.frameBytes;
+export function wavChunk(data: Uint8Array, wav: WavAudio, start: number, end: number): Uint8Array {
+    const first = wav.dataStart + start * wav.frameBytes;
+    const size = (end - start) * wav.frameBytes;
     const padding = size % 2;
-    const headerBytes = 12 + 8 + audio.fmt.length + 8;
+    const headerBytes = 12 + 8 + wav.fmt.length + 8;
     const chunk = new Uint8Array(headerBytes + size + padding);
     const view = dataView(chunk);
     writeAscii(chunk, 0, "RIFF");
     view.setUint32(4, headerBytes - 8 + size + padding, true);
     writeAscii(chunk, 8, "WAVEfmt ");
-    view.setUint32(16, audio.fmt.length, true);
-    chunk.set(audio.fmt, 20);
-    writeAscii(chunk, 20 + audio.fmt.length, "data");
-    view.setUint32(24 + audio.fmt.length, size, true);
+    view.setUint32(16, wav.fmt.length, true);
+    chunk.set(wav.fmt, 20);
+    writeAscii(chunk, 20 + wav.fmt.length, "data");
+    view.setUint32(24 + wav.fmt.length, size, true);
     chunk.set(data.subarray(first, first + size), headerBytes);
     return chunk;
 }
@@ -169,10 +153,10 @@ function parseFormat(body: Uint8Array): Format {
     }
     const widths = SAMPLE_WIDTHS[tag];
     if (widths === undefined) {
-        throw unsupported(`format tag 0x${`000${tag.toString(16).toUpperCase()}`.slice(-4)} is compressed or unknown`);
+        throw unsupported(`format tag 0x${tag.toString(16).toUpperCase().padStart(4, "0")} is compressed or unknown`);
     }
     const sampleWidth = (bits + 7) >> 3;
-    if (widths.indexOf(sampleWidth) < 0 || (tag === IEEE_FLOAT && bits !== sampleWidth * 8)) {
+    if (!widths.includes(sampleWidth) || (tag === IEEE_FLOAT && bits !== sampleWidth * 8)) {
         throw unsupported(`${bits}-bit ${tag === PCM ? "PCM" : "floating point"}`);
     }
     // Some writers leave the block size at 0 or 1, so it is recomputed for the chunks. A block larger
@@ -190,7 +174,7 @@ function parseFormat(body: Uint8Array): Format {
     }
     const extension = headerTag === EXTENSIBLE ? body.subarray(16, EXTENSIBLE_FMT_BYTES) : new Uint8Array(0);
     const fmt = fmtBody(headerTag, channels, sampleRate, sampleWidth, bits, extension);
-    return { fmt, channels, sampleRate, sampleWidth, isFloat: tag === IEEE_FLOAT };
+    return { fmt, channels, sampleRate, sampleWidth, isFloat: tag === IEEE_FLOAT, frameBytes };
 }
 
 function fmtBody(

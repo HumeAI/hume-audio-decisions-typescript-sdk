@@ -3,16 +3,17 @@
 import { abortRawResponse } from "../core/fetcher/RawResponse.js";
 import { DecisionsError } from "../errors/DecisionsError.js";
 import { dataView } from "./bytes.js";
-import { ceilDiv, describe, floorDiv } from "./integers.js";
+import { checkChoice } from "./checks.js";
+import { ceilDiv, floorDiv } from "./integers.js";
 import { samplesWav, type WavAudio } from "./wav.js";
 
-/** How a WAV file is mixed down before it is sent: "mix", "first_channel", or "none" to send it as it is. */
-export type DownmixStrategy = "mix" | "first_channel" | "none";
+const STRATEGIES = ["mix", "first_channel", "none"] as const;
 
-const STRATEGIES: readonly unknown[] = ["mix", "first_channel", "none"];
+/** How a WAV file is mixed down before it is sent: "mix", "first_channel", or "none" to send it as it is. */
+export type DownmixStrategy = (typeof STRATEGIES)[number];
 
 // The model hears audio at this rate, in one channel.
-export const MODEL_SAMPLE_RATE = 16000;
+const MODEL_SAMPLE_RATE = 16000;
 
 // The settings of ffmpeg's default resampler, which the API uses before the model hears the audio, so
 // audio resampled here reaches the model as it would have without this step.
@@ -29,7 +30,7 @@ const BLOCK = 8192;
 // The mixdown runs on the calling thread, so it lets other work run after about this long.
 const YIELD_MS = 50;
 
-export interface Downmixed {
+interface Downmixed {
     readonly data: Uint8Array;
     readonly wav: WavAudio;
 }
@@ -37,12 +38,8 @@ export interface Downmixed {
 type Read = (sample: number) => number;
 type Write = (output: number, value: number) => void;
 
-export function checkDownmixStrategy(strategy: unknown): DownmixStrategy {
-    const checked = strategy === undefined ? "mix" : strategy;
-    if (STRATEGIES.indexOf(checked) < 0) {
-        throw new RangeError(`downmixStrategy must be "mix", "first_channel" or "none", got ${describe(strategy)}.`);
-    }
-    return checked as DownmixStrategy;
+export function checkDownmixStrategy(strategy: unknown = "mix"): DownmixStrategy {
+    return checkChoice("downmixStrategy", strategy, STRATEGIES);
 }
 
 /**
@@ -143,11 +140,15 @@ function* resample(
     const phaseStep = fromRate * phases;
     const steps = (output: number) =>
         floorDiv(output, toRate) * phaseStep + floorDiv((output % toRate) * phaseStep, toRate);
+    let segment = new Float64Array(0);
     for (let start = 0; start < count; start += BLOCK) {
         const end = Math.min(start + BLOCK, count);
         const low = floorDiv(steps(start), phases) - center;
-        const segment = new Float64Array(floorDiv(steps(end - 1), phases) - center + taps - low);
-        for (let index = 0; index < segment.length; index++) {
+        const inputs = floorDiv(steps(end - 1), phases) - center + taps - low;
+        if (segment.length < inputs) {
+            segment = new Float64Array(inputs);
+        }
+        for (let index = 0; index < inputs; index++) {
             segment[index] = read(reflect(low + index, length));
         }
         for (let output = start; output < end; output++) {

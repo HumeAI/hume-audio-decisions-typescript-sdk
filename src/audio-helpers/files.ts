@@ -5,10 +5,20 @@ import { toMultipartDataPart, type Uploadable } from "../core/file/index.js";
 import { checkDownmixStrategy, type DownmixStrategy, downmixWav } from "./downmix.js";
 import { isWav, parseWav, type WavAudio, wavChunk } from "./wav.js";
 
-export interface ReadFile {
+interface ReadFile {
     readonly data: Uint8Array;
     readonly filename: string | undefined;
     readonly contentType: string | undefined;
+}
+
+export interface DownmixOptions {
+    /**
+     * How a WAV file is mixed down before it is sent: "mix", the default, mixes it the way the API
+     * does, so the model hears the same audio; "first_channel" keeps only the first channel; and
+     * "none" sends it as it is. MP3 files, and WAV files the SDK cannot read, are sent as they are.
+     * `iterAudioChunks` in `@humeai/decisions/audio-helpers` describes each.
+     */
+    downmixStrategy?: DownmixStrategy;
 }
 
 export function checkFile(file: Uploadable): void {
@@ -32,7 +42,7 @@ export async function readFile(file: Uploadable): Promise<ReadFile> {
  * with a DecisionsError if `signal` aborts during the mixdown.
  */
 export async function downmixUpload(
-    { downmixStrategy, ...upload }: DecisionsUpload & { downmixStrategy?: DownmixStrategy },
+    { downmixStrategy, ...upload }: DecisionsUpload & DownmixOptions,
     signal?: AbortSignal,
 ): Promise<DecisionsUpload> {
     const strategy = checkDownmixStrategy(downmixStrategy);
@@ -41,23 +51,27 @@ export async function downmixUpload(
     }
     checkFile(upload.file);
     const { data, filename, contentType } = await readFile(upload.file);
-    let sent = data;
-    if (isWav(data)) {
-        let wav: WavAudio | undefined;
-        try {
-            wav = parseWav(data);
-        } catch {
-            // A WAV file this parser cannot read may still be one the API can decode, so it is left to the API.
-        }
-        if (wav !== undefined) {
-            const mixed = await downmixWav(data, wav, strategy, signal);
-            if (mixed.wav !== wav) {
-                sent = wavChunk(mixed.data, mixed.wav, 0, mixed.wav.sampleCount);
-            }
-        }
-    }
     // A stream that has been read cannot always be read again, so what was read is sent instead.
-    return { ...upload, file: { data: sent, filename, contentType } };
+    return { ...upload, file: { data: await downmixFile(data, strategy, signal), filename, contentType } };
+}
+
+async function downmixFile(
+    data: Uint8Array,
+    strategy: DownmixStrategy,
+    signal: AbortSignal | undefined,
+): Promise<Uint8Array> {
+    if (!isWav(data)) {
+        return data;
+    }
+    let wav: WavAudio;
+    try {
+        wav = parseWav(data);
+    } catch {
+        // A WAV file this parser cannot read may still be one the API can decode, so it is left to the API.
+        return data;
+    }
+    const mixed = await downmixWav(data, wav, strategy, signal);
+    return mixed.wav === wav ? data : wavChunk(mixed.data, mixed.wav, 0, mixed.wav.sampleCount);
 }
 
 async function readBytes(data: unknown): Promise<Uint8Array> {

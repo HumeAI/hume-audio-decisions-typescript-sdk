@@ -21,15 +21,3 @@ export function roundDiv(numerator: number, denominator: number): number {
 export function ceilDiv(numerator: number, denominator: number): number {
     return -floorDiv(-numerator, denominator);
 }
-
-export function checkInteger(name: string, value: unknown): number {
-    // Arithmetic on larger numbers is not exact, and the bounds checked later assume it is.
-    if (typeof value !== "number" || !Number.isSafeInteger(value)) {
-        throw new TypeError(`${name} must be a safe integer, got ${describe(value)}.`);
-    }
-    return value;
-}
-
-export function describe(value: unknown): string {
-    return typeof value === "string" ? JSON.stringify(value) : String(value);
-}
