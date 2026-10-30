@@ -74,10 +74,12 @@ The following directories contain generated code:
 
 Some of the SDK is written by hand rather than generated:
 
-1. `README.md`, `LICENSE` and this file, which are listed in `.fernignore`.
-2. The publish job in `.github/workflows/ci.yml`, a change to a generated file.
+1. `src/audio-helpers`, `tests/audio-helpers`, `README.md`, `LICENSE` and this file, which are listed in `.fernignore`.
+2. These changes to generated files:
+   1. The `./audio-helpers` entry in `exports` in `package.json`.
+   2. The publish job in `.github/workflows/ci.yml`.
 
-Regeneration rewrites the generated files. Fern Replay applies the committed changes to them again and records them in `.fern/replay.lock`, but check each regeneration for them. Nothing fails if the publish job is lost.
+Regeneration rewrites the generated files. Fern Replay applies the committed changes to them again and records them in `.fern/replay.lock`, but check each regeneration for them. The tests in `tests/audio-helpers` fail if the `exports` entry is missing, while nothing fails if the publish job is lost.
 
 ### Merging Pull Requests
 
