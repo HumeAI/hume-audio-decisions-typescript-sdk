@@ -25,18 +25,18 @@ const MIN_SAMPLE_RATE = 1000;
 const MAX_SAMPLE_RATE = 768_000;
 
 export interface WavAudio {
-    // The fmt chunk body written into every chunk.
+    /** The fmt chunk body written into every chunk. */
     readonly fmt: Uint8Array;
     readonly channels: number;
-    // The speaker of each channel, from an extensible header, or 0 when the header names none.
+    /** The speaker of each channel, from an extensible header, or 0 when the header names none. */
     readonly channelMask: number;
     readonly sampleRate: number;
-    // Bytes in one sample of one channel.
+    /** Bytes in one sample of one channel. */
     readonly sampleWidth: number;
     readonly isFloat: boolean;
     readonly dataStart: number;
     readonly sampleCount: number;
-    // Bytes in one sample of every channel.
+    /** Bytes in one sample of every channel. */
     readonly frameBytes: number;
 }
 
@@ -88,13 +88,13 @@ export function parseWav(data: Uint8Array): WavAudio {
 }
 
 /** Describes samples that start at offset 0 of their own buffer. */
-export function samplesWav(
-    channels: number,
-    sampleRate: number,
-    sampleWidth: number,
-    isFloat: boolean,
-    sampleCount: number,
-): WavAudio {
+export function samplesWav({
+    channels,
+    sampleRate,
+    sampleWidth,
+    isFloat,
+    sampleCount,
+}: Pick<WavAudio, "channels" | "sampleRate" | "sampleWidth" | "isFloat" | "sampleCount">): WavAudio {
     const fmt = fmtBody(
         isFloat ? IEEE_FLOAT : PCM,
         channels,

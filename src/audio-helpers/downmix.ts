@@ -46,40 +46,44 @@ export function checkDownmixStrategy(strategy: unknown = "mix"): DownmixStrategy
 
 /**
  * The samples of `wav` mixed down by `strategy` into one channel, with a description of them, or
- * `data` and `wav` themselves when the API would mix the file the same way and converting it would
- * not make it smaller. Resampled audio is at most MODEL_SAMPLE_RATE, in 32-bit floating point. Rejects
- * with a DecisionsError once `signal` aborts.
+ * undefined when the file is best sent as it is: the API would mix it the same way and converting it
+ * would not make it smaller. Resampled audio is at most MODEL_SAMPLE_RATE, in 32-bit floating point.
+ * Rejects with a DecisionsError once `signal` aborts.
  */
 export async function downmixWav(
     data: Uint8Array,
     wav: WavAudio,
     strategy: DownmixStrategy,
     signal?: AbortSignal,
-): Promise<Downmixed> {
+): Promise<Downmixed | undefined> {
     // ffmpeg weighs channels by the speakers in the header's channel mask and leaves out the LFE
     // channel, and it refuses some two-channel masks, so only audio it mixes by adding the channels at
     // equal weight is mixed here. Anything else is sent as it is for the API to mix.
     if (strategy === "none" || (strategy === "mix" && !mixesEvenly(wav))) {
-        return { data, wav };
+        return undefined;
     }
     const sampleRate = Math.min(wav.sampleRate, MODEL_SAMPLE_RATE);
     const count = ceilDiv(wav.sampleCount * sampleRate, wav.sampleRate);
     // The API converts every sample to 32-bit floating point, so writing that loses nothing and cannot
     // clip, but it is larger than some recordings that the API would convert just the same.
-    const converted = samplesWav(1, sampleRate, 4, true, count);
+    const converted = samplesWav({ channels: 1, sampleRate, sampleWidth: 4, isFloat: true, sampleCount: count });
     const unchangedBytes = wav.sampleCount * wav.frameBytes;
     const copyBytes = wav.sampleCount * wav.sampleWidth;
     const convertedBytes = count * converted.frameBytes;
     // The API would mix every channel, so the first is taken out even when that is not smaller.
     const picksChannel = strategy === "first_channel" && wav.channels > 1;
     if (!picksChannel && convertedBytes >= unchangedBytes) {
-        return { data, wav };
+        return undefined;
     }
     // A copy of the channel's samples is exact, so it is preferred whenever it is no larger.
     if (picksChannel && copyBytes <= convertedBytes) {
         const picked = new Uint8Array(copyBytes);
         await paced(copyFirstChannel(data, wav, picked), signal);
-        return { data: picked, wav: samplesWav(1, wav.sampleRate, wav.sampleWidth, wav.isFloat, wav.sampleCount) };
+        const { sampleWidth, isFloat, sampleCount } = wav;
+        return {
+            data: picked,
+            wav: samplesWav({ channels: 1, sampleRate: wav.sampleRate, sampleWidth, isFloat, sampleCount }),
+        };
     }
     const read = monoReader(data, wav, strategy === "mix" && wav.channels === 2);
     const out = new Uint8Array(convertedBytes);

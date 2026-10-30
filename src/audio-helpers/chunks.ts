@@ -220,30 +220,22 @@ export function prepareChunks(
     };
 }
 
-function checkChunkOptions({
-    maxChunkMs,
-    startMs,
-    endMs,
-    split = "even",
-    downmixStrategy,
-}: iterAudioChunks.Options): ChunkOptions {
-    checkChoice("split", split, SPLITS);
-    const downmix = checkDownmixStrategy(downmixStrategy);
-    checkInteger("maxChunkMs", maxChunkMs);
+function checkChunkOptions(options: iterAudioChunks.Options): ChunkOptions {
+    const split = checkChoice("split", options.split === undefined ? "even" : options.split, SPLITS);
+    const downmixStrategy = checkDownmixStrategy(options.downmixStrategy);
+    const maxChunkMs = checkInteger("maxChunkMs", options.maxChunkMs);
     if (maxChunkMs < 1 || maxChunkMs > MAX_CHUNK_MS) {
         throw new RangeError(`maxChunkMs must be between 1 and ${MAX_CHUNK_MS}, got ${maxChunkMs}.`);
     }
-    const start = startMs === undefined ? 0 : checkInteger("startMs", startMs);
-    if (start < 0) {
-        throw new RangeError(`startMs must not be negative, got ${start}.`);
+    const startMs = options.startMs === undefined ? 0 : checkInteger("startMs", options.startMs);
+    if (startMs < 0) {
+        throw new RangeError(`startMs must not be negative, got ${startMs}.`);
     }
-    if (endMs !== undefined) {
-        checkInteger("endMs", endMs);
-        if (endMs <= start) {
-            throw new RangeError(`endMs must be greater than startMs, got ${endMs}.`);
-        }
+    const endMs = options.endMs === undefined ? undefined : checkInteger("endMs", options.endMs);
+    if (endMs !== undefined && endMs <= startMs) {
+        throw new RangeError(`endMs must be greater than startMs, got ${endMs}.`);
     }
-    return { maxChunkMs, startMs: start, endMs, split, downmixStrategy: downmix };
+    return { maxChunkMs, startMs, endMs, split, downmixStrategy };
 }
 
 async function planAudioChunks(
@@ -252,7 +244,8 @@ async function planAudioChunks(
     signal: AbortSignal | undefined,
 ): Promise<Iterable<PlannedChunk>> {
     if (isWav(data)) {
-        const mixed = await downmixWav(data, parseWav(data), options.downmixStrategy, signal);
+        const wav = parseWav(data);
+        const mixed = (await downmixWav(data, wav, options.downmixStrategy, signal)) ?? { data, wav };
         return wavChunks(mixed.data, mixed.wav, options);
     }
     if (isMp3(data)) {

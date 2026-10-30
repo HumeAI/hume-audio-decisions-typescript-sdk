@@ -25,19 +25,21 @@ const LAME_TAG_ENCODERS = ["LAME", "Lavf", "Lavc"];
 const TRAILING_TAGS = ["TAG", "APETAGEX", "LYRICSBEGIN", "ID3"];
 
 interface Header {
-    version: number;
-    sampleRate: number;
-    length: number;
-    // Bytes from the start of the frame to its side information, which follows the header and an
-    // optional checksum.
-    sideInfoStart: number;
-    sideInfoSize: number;
+    readonly version: number;
+    readonly sampleRate: number;
+    readonly length: number;
+    /**
+     * Bytes from the start of the frame to its side information, which follows the header and an
+     * optional checksum.
+     */
+    readonly sideInfoStart: number;
+    readonly sideInfoSize: number;
 }
 
 interface HeaderFrame {
-    leadingSamples: number;
-    trailingSamples: number;
-    statedFrames: number | undefined;
+    readonly leadingSamples: number;
+    readonly trailingSamples: number;
+    readonly statedFrames: number | undefined;
 }
 
 const NO_HEADER_FRAME: HeaderFrame = { leadingSamples: 0, trailingSamples: 0, statedFrames: undefined };
@@ -45,17 +47,19 @@ const NO_HEADER_FRAME: HeaderFrame = { leadingSamples: 0, trailingSamples: 0, st
 export interface Mp3Audio {
     readonly sampleRate: number;
     readonly samplesPerFrame: number;
-    // Where each frame starts, followed by where the last one ends. Frames are contiguous.
+    /** Where each frame starts, followed by where the last one ends. Frames are contiguous. */
     readonly offsets: readonly number[];
-    // For each frame, how many bytes of its audio data are stored in the frames before it, and how
-    // many bytes of audio data, its own or later frames', it holds itself.
+    /** For each frame, how many bytes of its audio data are stored in the frames before it. */
     readonly reservoirBytes: readonly number[];
+    /** For each frame, how many bytes of audio data, its own or later frames', it holds itself. */
     readonly mainDataBytes: readonly number[];
-    // Samples decoded from the frames before the recording starts, which players leave out when a LAME
-    // tag states them. 0 without one.
+    /**
+     * Samples decoded from the frames before the recording starts, which players leave out when a
+     * LAME tag states them. 0 without one.
+     */
     readonly leadingSamples: number;
     readonly frameCount: number;
-    // The sample after the recording's last, counted from the start of the first frame.
+    /** The sample after the recording's last, counted from the start of the first frame. */
     readonly endSample: number;
 }
 

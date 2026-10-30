@@ -72,10 +72,10 @@ async function downmixFile(
         return data;
     }
     const mixed = await downmixWav(data, wav, strategy, signal);
-    return mixed.wav === wav ? data : wavChunk(mixed.data, mixed.wav, 0, mixed.wav.sampleCount);
+    return mixed === undefined ? data : wavChunk(mixed.data, mixed.wav, 0, mixed.wav.sampleCount);
 }
 
-async function readBytes(data: unknown): Promise<Uint8Array> {
+async function readBytes(data: Uploadable.FileLike): Promise<Uint8Array> {
     if (ArrayBuffer.isView(data)) {
         return asUint8Array(data);
     }
