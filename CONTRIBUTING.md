@@ -77,10 +77,11 @@ Some of the SDK is written by hand rather than generated:
 1. `src/audio-helpers`, `tests/audio-helpers`, `README.md`, `LICENSE` and this file, which are listed in `.fernignore`.
 2. These changes to generated files:
    1. The `./audio-helpers` entry in `exports` in `package.json`.
-   2. The ffmpeg install step in the test job in `.github/workflows/ci.yml`.
-   3. The publish job in `.github/workflows/ci.yml`.
+   2. In `src/api/resources/decisions/client/Client.ts`, the `downmixStrategy` option of `create` and the `createChunked` and `iterCreateChunked` methods.
+   3. The ffmpeg install step in the test job in `.github/workflows/ci.yml`.
+   4. The publish job in `.github/workflows/ci.yml`.
 
-Regeneration rewrites the generated files. Fern Replay applies the committed changes to them again and records them in `.fern/replay.lock`, but check each regeneration for them. The tests in `tests/audio-helpers` fail if the `exports` entry or the ffmpeg step is missing, while nothing fails if the publish job is lost.
+Regeneration rewrites the generated files. Fern Replay applies the committed changes to them again and records them in `.fern/replay.lock`, but check each regeneration for them. The tests in `tests/audio-helpers` fail if the `exports` entry, the changes to `Client.ts` or the ffmpeg step is missing, while nothing fails if the publish job is lost.
 
 ### Merging Pull Requests
 

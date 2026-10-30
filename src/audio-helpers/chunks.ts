@@ -219,7 +219,7 @@ export function checkChunkOptions({
 
 /**
  * Mixes down and plans the chunks `iterAudioChunks` gives, without copying any chunk's data. Rejects
- * with the reason of `signal` if it aborts during the mixdown.
+ * with a DecisionsError if `signal` aborts during the mixdown.
  */
 export async function planAudioChunks(
     data: Uint8Array,

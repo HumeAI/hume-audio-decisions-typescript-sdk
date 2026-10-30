@@ -1,6 +1,9 @@
 // Maintained by hand and listed in .fernignore, so SDK regeneration leaves it in place.
 
+import type { DecisionsUpload } from "../api/resources/decisions/client/requests/DecisionsUpload.js";
 import { toMultipartDataPart, type Uploadable } from "../core/file/index.js";
+import { checkDownmixStrategy, type DownmixStrategy, downmixWav } from "./downmix.js";
+import { isWav, parseWav, type WavAudio, wavChunk } from "./wav.js";
 
 export interface ReadFile {
     readonly data: Uint8Array;
@@ -22,6 +25,39 @@ export async function readFile(file: Uploadable): Promise<ReadFile> {
     // type, and a path is opened through the same file system access.
     const { data, filename, contentType } = await toMultipartDataPart(file);
     return { data: await readBytes(data), filename, contentType };
+}
+
+/**
+ * `upload` with a WAV recording mixed down as `downmixStrategy` asks, to send with `create`. Rejects
+ * with a DecisionsError if `signal` aborts during the mixdown.
+ */
+export async function downmixUpload(
+    { downmixStrategy, ...upload }: DecisionsUpload & { downmixStrategy?: DownmixStrategy },
+    signal?: AbortSignal,
+): Promise<DecisionsUpload> {
+    const strategy = checkDownmixStrategy(downmixStrategy);
+    if (strategy === "none") {
+        return upload;
+    }
+    checkFile(upload.file);
+    const { data, filename, contentType } = await readFile(upload.file);
+    let sent = data;
+    if (isWav(data)) {
+        let wav: WavAudio | undefined;
+        try {
+            wav = parseWav(data);
+        } catch {
+            // A WAV file this parser cannot read may still be one the API can decode, so it is left to the API.
+        }
+        if (wav !== undefined) {
+            const mixed = await downmixWav(data, wav, strategy, signal);
+            if (mixed.wav !== wav) {
+                sent = wavChunk(mixed.data, mixed.wav, 0, mixed.wav.sampleCount);
+            }
+        }
+    }
+    // A stream that has been read cannot always be read again, so what was read is sent instead.
+    return { ...upload, file: { data: sent, filename, contentType } };
 }
 
 async function readBytes(data: unknown): Promise<Uint8Array> {

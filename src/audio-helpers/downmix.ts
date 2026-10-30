@@ -1,5 +1,7 @@
 // Maintained by hand and listed in .fernignore, so SDK regeneration leaves it in place.
 
+import { abortRawResponse } from "../core/fetcher/RawResponse.js";
+import { DecisionsError } from "../errors/DecisionsError.js";
 import { dataView } from "./bytes.js";
 import { ceilDiv, describe, floorDiv } from "./integers.js";
 import { samplesWav, type WavAudio } from "./wav.js";
@@ -47,7 +49,7 @@ export function checkDownmixStrategy(strategy: unknown): DownmixStrategy {
  * The samples of `wav` mixed down by `strategy` into one channel, with a description of them, or
  * `data` and `wav` themselves when the API would mix the file the same way and converting it would
  * not make it smaller. Resampled audio is at most MODEL_SAMPLE_RATE, in 32-bit floating point. Rejects
- * with the reason of `signal` once it aborts.
+ * with a DecisionsError once `signal` aborts.
  */
 export async function downmixWav(
     data: Uint8Array,
@@ -276,7 +278,13 @@ async function paced(work: Iterator<void>, signal: AbortSignal | undefined): Pro
 
 function throwIfAborted(signal: AbortSignal | undefined): void {
     if (signal?.aborted) {
-        throw signal.reason;
+        // The error the client throws when it aborts a request, so that an abort is caught the same
+        // way wherever it lands.
+        throw new DecisionsError({
+            message: "The user aborted a request",
+            rawResponse: abortRawResponse,
+            cause: signal.reason,
+        });
     }
 }
 

@@ -4,3 +4,4 @@
 
 export { type AudioChunk, type ChunkSplit, iterAudioChunks } from "./chunks.js";
 export type { DownmixStrategy } from "./downmix.js";
+export { ChunkedDecisionsResult, ChunkResult, type ChunkStatus } from "./results.js";
