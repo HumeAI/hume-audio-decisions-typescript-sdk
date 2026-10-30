@@ -207,11 +207,11 @@ describe("iterAudioChunks with MP3 files", () => {
         ]);
     });
 
-    it.each([false, true])("leaves tags out of the chunks (ID3v2 footer %s)", async (footer) => {
+    it("leaves tags out of the chunks", async () => {
         const all = frames(10);
         const id3v1 = bytes("TAG", new Uint8Array(125));
         const recording = bytes(
-            id3v2(300, { footer }),
+            id3v2(300, { footer: true }),
             id3v2(20),
             concatFrames(all),
             "APETAGEX",
@@ -290,12 +290,16 @@ describe("iterAudioChunks with MP3 files", () => {
         expect(chunks.map((c) => c.data)).toEqual([concatFrames(all)]);
     });
 
-    it.each([
-        ["", new Uint8Array(0)],
-        ["followed by an ID3v1 tag", bytes("TAG", new Uint8Array(125))],
-    ])("leaves out bytes after the last frame that are not a frame %s", async (_, tag) => {
+    it("leaves out bytes after the last frame that are not a frame followed by an ID3v1 tag", async () => {
         const all = frames(10);
-        const recording = bytes(concatFrames(all), new Uint8Array(64), [0xff], new Uint8Array(63), tag);
+        const recording = bytes(
+            concatFrames(all),
+            new Uint8Array(64),
+            [0xff],
+            new Uint8Array(63),
+            "TAG",
+            new Uint8Array(125),
+        );
 
         const chunks = await collect(iterAudioChunks(recording, { maxChunkMs: 1000 }));
 

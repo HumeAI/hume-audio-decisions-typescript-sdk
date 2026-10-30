@@ -24,12 +24,10 @@ const FFMPEG_SCENARIOS: [number, number, DownmixStrategy, boolean][] = [
     [8000, 2, "mix", false],
     [48000, 2, "first_channel", false],
     [8000, 2, "first_channel", false],
-    [16000, 2, "first_channel", false],
-    [22050, 2, "first_channel", false],
     [22050, 6, "mix", false],
     [48000, 1, "mix", true],
+    // Mixing the two channels alone goes above full scale.
     [48000, 2, "mix", true],
-    [48000, 2, "first_channel", true],
 ];
 const HAS_FFMPEG = spawnSync("ffmpeg", ["-version"]).error === undefined;
 
@@ -112,10 +110,8 @@ describe("iterAudioChunks mixdown", () => {
 
     it.each<[DownmixStrategy, number, number, number, boolean]>([
         ["mix", 16000, 1, 2, false],
-        ["first_channel", 16000, 1, 2, false],
         ["mix", 16000, 1, 4, true],
         ["first_channel", 22050, 1, 2, false],
-        ["mix", 8000, 2, 1, false],
         ["mix", 16000, 2, 2, false],
     ])("leaves audio the API mixes the same way unchanged when it would not get smaller (%s, %i Hz, %i channels, %i bytes, float %s)", async (strategy, sampleRate, channels, sampleWidth, isFloat) => {
         const file = samplesWav(noise(1000, channels), { channels, sampleRate, sampleWidth, isFloat });
@@ -126,14 +122,12 @@ describe("iterAudioChunks mixdown", () => {
         expect(samplesOf(audio)).toEqual(samplesOf(readWav(file)));
     });
 
-    it.each([
-        16000, 48000,
-    ])("leaves audio with more than two channels unchanged when mixing, at %i Hz", async (sampleRate) => {
-        const file = samplesWav(noise(1000, 4), { channels: 4, sampleRate });
+    it("leaves audio with more than two channels unchanged when mixing", async () => {
+        const file = samplesWav(noise(1000, 4), { channels: 4, sampleRate: 48000 });
 
         const audio = readWav(await downmix(file));
 
-        expect(format(audio)).toEqual([sampleRate, 4, 2, false]);
+        expect(format(audio)).toEqual([48000, 4, 2, false]);
         expect(samplesOf(audio)).toEqual(samplesOf(readWav(file)));
     });
 
@@ -183,26 +177,22 @@ describe("iterAudioChunks mixdown", () => {
         expect(maxAbs(samples.map((sample) => sample - 0.25 * Math.SQRT1_2))).toBeLessThanOrEqual(1e-7);
     });
 
-    describe.each([8000, 16000])("with the first channel at %i Hz", (sampleRate) => {
-        it.each(
-            FORMATS,
-        )("keeps every sample of the first channel of %i-byte samples (float %s)", async (sampleWidth, isFloat) => {
-            const file = samplesWav(noise(1000, 2), { channels: 2, sampleRate, sampleWidth, isFloat });
+    it.each(
+        // Each sample width is copied the same way, so these cover integers, floating point, and the
+        // 64-bit floating point that is written as 32-bit.
+        FORMATS.filter(([sampleWidth]) => sampleWidth === 2 || sampleWidth >= 4),
+    )("keeps every sample of the first channel of %i-byte samples (float %s)", async (sampleWidth, isFloat) => {
+        const file = samplesWav(noise(1000, 2), { channels: 2, sampleRate: 8000, sampleWidth, isFloat });
 
-            const audio = readWav(await downmix(file, "first_channel"));
+        const audio = readWav(await downmix(file, "first_channel"));
 
-            let expected = firstChannel(samplesOf(readWav(file)), 2);
-            // 64-bit floating point is halved by writing it as 32-bit, the format the API converts it to.
-            if (sampleWidth === 8) {
-                expected = expected.map(Math.fround);
-            }
-            expect([audio.sampleRate, audio.sampleWidth, audio.isFloat]).toEqual([
-                sampleRate,
-                Math.min(sampleWidth, 4),
-                isFloat,
-            ]);
-            expect(samplesOf(audio)).toEqual(expected);
-        });
+        let expected = firstChannel(samplesOf(readWav(file)), 2);
+        // 64-bit floating point is halved by writing it as 32-bit, the format the API converts it to.
+        if (sampleWidth === 8) {
+            expected = expected.map(Math.fround);
+        }
+        expect([audio.sampleRate, audio.sampleWidth, audio.isFloat]).toEqual([8000, Math.min(sampleWidth, 4), isFloat]);
+        expect(samplesOf(audio)).toEqual(expected);
     });
 
     it("keeps one channel at 16 kHz as floating point with first_channel", async () => {

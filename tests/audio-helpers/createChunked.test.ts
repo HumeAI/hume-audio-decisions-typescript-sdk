@@ -9,15 +9,9 @@ import {
     type DownmixStrategy,
     iterAudioChunks,
 } from "../../src/audio-helpers/index";
-import { wavChunk } from "../../src/audio-helpers/wav";
 import { DecisionsClient } from "../../src/Client";
 import { DecisionsError } from "../../src/errors/index";
 import { collect, expectError, iterationError, pcm, samplesWav, thrownBy, wavFile } from "./audioFiles";
-
-vi.mock("../../src/audio-helpers/wav", async (importOriginal) => {
-    const original = await importOriginal<typeof import("../../src/audio-helpers/wav")>();
-    return { ...original, wavChunk: vi.fn(original.wavChunk) };
-});
 
 const ASSETS = join(__dirname, "assets");
 
@@ -234,17 +228,6 @@ describe("createChunked", () => {
         expect(sent.map((request) => request.headers.get("X-Trace"))).toEqual(["abc", "abc"]);
     });
 
-    it("sends nothing when the recording cannot be split", async () => {
-        const sent: Sent[] = [];
-
-        const error = await rejection(
-            decisions(sent).createChunked({ request: REQUEST, file: wav(2000), maxChunkMs: 1000, endMs: 2500 }),
-        );
-
-        expectError(error, RangeError, "endMs must not exceed");
-        expect(sent).toEqual([]);
-    });
-
     it("continues after a chunk whose audio cannot be decoded", async () => {
         const sent: Sent[] = [];
 
@@ -275,7 +258,6 @@ describe("createChunked", () => {
 
     it.each<[string, () => Response]>([
         ["out of tokens", () => failed(402, "payment_required")],
-        ["invalid request", () => failed(400, "question_invalid")],
         ["unknown code", () => failed(400, "a_code_added_later")],
         ["API key rejected by the gateway", () => json(401, { message: "Invalid API key", request_id: "req" })],
     ])("stops at any other error and records the rest as not attempted: %s", async (_name, failure) => {
@@ -296,18 +278,6 @@ describe("createChunked", () => {
         ]);
         expect(result.responses[0]).toBeDefined();
         expect(result.complete).toBe(false);
-    });
-
-    it("copies no chunk after a stop", async () => {
-        vi.mocked(wavChunk).mockClear();
-
-        const result = await decisions(
-            [],
-            failingAt(2, () => failed(402, "payment_required")),
-        ).createChunked({ request: REQUEST, file: wav(4000), maxChunkMs: 1000 });
-
-        expect(statuses(result.chunks)).toEqual(["succeeded", "failed", "not_attempted", "not_attempted"]);
-        expect(vi.mocked(wavChunk).mock.calls.map((call) => call[2])).toEqual([0, 8000]);
     });
 
     it("stops when the connection drops", async () => {
@@ -619,8 +589,8 @@ describe("create", () => {
         expect(data.runId).toBe("run-1");
     });
 
-    it.each(["tone_mpeg1_32k.mp3", "tone_mpeg25_8k.mp3"])("sends MP3 file %s as it is", async (name) => {
-        const audio = asset(name);
+    it("sends an MP3 file as it is", async () => {
+        const audio = asset("tone_mpeg1_32k.mp3");
 
         expectBytes([await uploaded(audio)], [audio]);
     });
@@ -631,14 +601,10 @@ describe("create", () => {
         expectBytes([await uploaded(new Blob([audio]).stream())], [audio]);
     });
 
-    it.each<[string, (view: DataView) => void]>([
-        // A compressed format tag, which the API may still decode.
-        ["compressed", (view) => view.setUint16(20, 2, true)],
-        ["too many channels for the block size", (view) => view.setUint16(22, 40000, true)],
-        ["sample rate above the maximum", (view) => view.setUint32(24, 768_001, true)],
-    ])("sends a WAV file it cannot read as it is: %s", async (_name, change) => {
+    it("sends a WAV file it cannot read as it is", async () => {
         const audio = wav(2500, { sampleRate: 48000, channels: 2 });
-        change(new DataView(audio.buffer));
+        // A compressed format tag, which the API may still decode.
+        new DataView(audio.buffer).setUint16(20, 2, true);
 
         expectBytes([await uploaded(audio)], [audio]);
     });

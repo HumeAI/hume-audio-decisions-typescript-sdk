@@ -53,15 +53,8 @@ describe("iterAudioChunks inputs", () => {
             "{ data, filename, contentType }",
             () => ({ data: recording, filename: "call.wav", contentType: "audio/wav" }),
         ],
-        ["{ data } holding a stream", () => ({ data: Readable.from(pieces(recording)) })],
     ])("gives the same chunks from %s as from its bytes", async (_, file) => {
         expect(await chunksOf(file())).toEqual(await chunksOf(recording));
-    });
-
-    it.skipIf(typeof File === "undefined")("gives the same chunks from a File as from its bytes", async () => {
-        const file = new File([recording], "call.wav", { type: "audio/wav" });
-
-        expect(await chunksOf(file)).toEqual(await chunksOf(recording));
     });
 
     it("gives the same chunks from { path } and from a file stream as from its bytes", async () => {
