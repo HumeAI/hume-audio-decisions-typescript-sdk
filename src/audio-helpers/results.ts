@@ -76,7 +76,8 @@ export class ChunkedDecisionsResult {
     /**
      * The `startMs` to give a new job, with the same `endMs`, so that it sends again the audio from
      * the chunk that stopped this job to the end. Earlier chunks that failed because their audio could
-     * not be decoded are not sent again. Null when no chunk stopped the job.
+     * not be decoded are not sent again. A WAV chunk's `endMs` is rounded to the millisecond, so the
+     * new job can skip or repeat a few samples where it starts. Null when no chunk stopped the job.
      */
     public get resumeMs(): number | null {
         const rule = new StopRule();
@@ -131,8 +132,9 @@ async function* send(
             } catch (raised) {
                 // An abort ends the job rather than failing one chunk. Anything other than a
                 // DecisionsError did not come from the request, so it is not a chunk's outcome either,
-                // except a ParseError: the generated client throws one, before it reads the status, when
-                // a response body is not the JSON object it expects, such as a proxy's HTML error page.
+                // except a ParseError: the generated client throws one when a response body is not the
+                // JSON it expects for the status, such as a proxy's HTML error page, and the status is
+                // lost with it.
                 if (signal?.aborted || !(raised instanceof DecisionsError || raised instanceof ParseError)) {
                     throw raised;
                 }
