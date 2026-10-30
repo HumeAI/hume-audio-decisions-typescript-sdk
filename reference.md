@@ -99,6 +99,81 @@ await client.decisions.create({
 </dl>
 </details>
 
+<details><summary><code>client.decisions.<a href="/src/api/resources/decisions/client/Client.ts">inputTokens</a>({ ...params }) -> Decisions.InputTokensResponse</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Counts the input tokens a decisions request would be billed for, without uploading or evaluating its audio. Send the `request` part of the decisions request as a JSON body, with `audio_duration_ms` for the audio file it would send. No run is recorded, so the response has no `run_id`.
+
+The context and questions are validated as a decisions request's are, and fail with the same errors. The audio itself is not checked, so a request counted here can still be rejected by `POST /v0/decisions/file` for its audio file.
+
+Hume counts input tokens from the audio duration, the context, and each question's text, options and type.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```typescript
+await client.decisions.inputTokens({
+    audioDurationMs: 1,
+    questions: {
+        "whispered": {
+            type: "noul",
+            instructions: "Is the voice whispering?"
+        }
+    }
+});
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**request:** `Decisions.InputTokensRequest` 
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**requestOptions:** `DecisionsClient.RequestOptions` 
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
 ## runs
 <details><summary><code>client.runs.<a href="/src/api/resources/runs/client/Client.ts">list</a>({ ...params }) -> Decisions.RunsPage</code></summary>
 <dl>

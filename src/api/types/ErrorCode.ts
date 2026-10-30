@@ -5,11 +5,11 @@
  *
  * **`400 Bad Request`**: something in the request needs correcting.
  *
- * - `message_invalid`: the request body is malformed or does not match the schema outside a question, for example because it has no `request` part, or no `file` part or more than one.
+ * - `message_invalid`: the request body is malformed or does not match the schema outside a question, for example because a decisions request has no `request` part, or no `file` part or more than one, or an input tokens request has no `audio_duration_ms`.
  * - `question_invalid`: a question is invalid, including when it does not match the schema, for example because it has duplicate option names or fewer than two options.
  * - `audio_decode_failed`: the audio file could not be decoded.
  * - `audio_format_unsupported`: the audio file is not MP3 or WAV.
- * - `audio_too_long`: the audio is longer than 5 minutes.
+ * - `audio_too_long`: the audio is longer than 5 minutes, or `audio_duration_ms` is over 300000.
  * - `invalid_request`: a query parameter has a value the endpoint does not accept, or `cursor` is not one the endpoint issued. List runs only.
  *
  * **`402 Payment Required`**
@@ -30,7 +30,7 @@
  *
  * **`415 Unsupported Media Type`**
  *
- * - `unsupported_media_type`: the request body is not `multipart/form-data`.
+ * - `unsupported_media_type`: the request body is not `multipart/form-data` for a decisions request, or not `application/json` for an input tokens request.
  *
  * **`500 Internal Server Error`**
  *
