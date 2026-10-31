@@ -145,8 +145,8 @@ This project uses automated code formatting and linting. Run `pnpm run check:fix
 
 If you have questions or run into issues:
 
-1. Check the [Hume Audio Decisions documentation](https://dev.hume.ai/decisions/docs/overview)
-2. Search existing [issues in this repository](https://github.com/HumeAI/hume-decisions-typescript-sdk/issues)
+1. Check the [Audio Decisions documentation](https://dev.hume.ai/decisions/docs/overview)
+2. Search existing [issues in this repository](https://github.com/HumeAI/hume-audio-decisions-typescript-sdk/issues)
 3. Open a new issue if your question hasn't been addressed
 
 For questions about how Fern generates the SDK, see the [Fern documentation](https://buildwithfern.com).
