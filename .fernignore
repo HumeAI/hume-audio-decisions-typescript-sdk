@@ -5,3 +5,5 @@ LICENSE
 .fern/replay.lock
 .fern/replay.yml
 .gitattributes
+src/audio-helpers
+tests/audio-helpers

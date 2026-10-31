@@ -74,10 +74,14 @@ The following directories contain generated code:
 
 Some of the SDK is written by hand rather than generated:
 
-1. `README.md`, `LICENSE` and this file, which are listed in `.fernignore`.
-2. The publish job in `.github/workflows/ci.yml`, a change to a generated file.
+1. `src/audio-helpers`, `tests/audio-helpers`, `README.md`, `LICENSE` and this file, which are listed in `.fernignore`.
+2. These changes to generated files:
+   1. The `./audio-helpers` entry in `exports` in `package.json`.
+   2. In `src/api/resources/decisions/client/Client.ts`, the `downmixStrategy` option of `create` and the `createChunked` and `iterCreateChunked` methods.
+   3. The ffmpeg install step in the test job in `.github/workflows/ci.yml`.
+   4. The publish job in `.github/workflows/ci.yml`.
 
-Regeneration rewrites the generated files. Fern Replay applies the committed changes to them again and records them in `.fern/replay.lock`, but check each regeneration for them. Nothing fails if the publish job is lost.
+Regeneration rewrites the generated files. Fern Replay applies the committed changes to them again and records them in `.fern/replay.lock`, but check each regeneration for them. The tests in `tests/audio-helpers` fail if the `exports` entry, the changes to `Client.ts` or the ffmpeg step is missing, while nothing fails if the publish job is lost.
 
 ### Merging Pull Requests
 
@@ -141,7 +145,7 @@ This project uses automated code formatting and linting. Run `pnpm run check:fix
 
 If you have questions or run into issues:
 
-1. Check the [Hume Decisions documentation](https://dev.hume.ai/decisions/docs/overview)
+1. Check the [Hume Audio Decisions documentation](https://dev.hume.ai/decisions/docs/overview)
 2. Search existing [issues in this repository](https://github.com/HumeAI/hume-decisions-typescript-sdk/issues)
 3. Open a new issue if your question hasn't been addressed
 
