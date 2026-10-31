@@ -6,11 +6,11 @@
         "namespaceExport": "Decisions",
         "noSerdeLayer": false,
         "packageJson": {
-            "description": "A TypeScript SDK for the Hume Audio Decisions API",
+            "description": "A TypeScript SDK for the Audio Decisions API",
             "homepage": "https://dev.hume.ai/decisions/docs/overview"
         }
     },
-    "originGitCommit": "c35a39875be6a19ec7206bb922db47dde9cebb87",
+    "originGitCommit": "1bbdc5f33b5fc8200c5189ce422b0542b20414cd",
     "originGitCommitIsDirty": false,
     "invokedBy": "ci",
     "requestedVersion": "0.1.0",
