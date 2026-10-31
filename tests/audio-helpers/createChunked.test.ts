@@ -690,16 +690,19 @@ describe("aborting during the mixdown", () => {
         ],
     ])("rejects %s with the abort error without finishing the mixdown or sending anything", async (_name, call) => {
         // Every read of the clock moves it a second on, so the mixdown pauses after each block of work
-        // however fast it runs, and reads the clock once per block.
-        let clockReads = 0;
-        const clock = vi.spyOn(Date, "now").mockImplementation(() => ++clockReads * 1000);
+        // however fast it runs. The second read is the one after the first block that decides to pause,
+        // so aborting there means the mixdown should stop at that pause without reading the clock again.
+        const readsAtAbort = 2;
         const sent: Sent[] = [];
         const controller = new AbortController();
-        let readsAtAbort = 0;
-        setTimeout(() => {
-            readsAtAbort = clockReads;
-            controller.abort();
-        }, 0);
+        let clockReads = 0;
+        const clock = vi.spyOn(Date, "now").mockImplementation(() => {
+            clockReads += 1;
+            if (clockReads === readsAtAbort) {
+                controller.abort();
+            }
+            return clockReads * 1000;
+        });
 
         let error: Error;
         try {
@@ -709,7 +712,6 @@ describe("aborting during the mixdown", () => {
         }
 
         expectAbortError(error);
-        expect(readsAtAbort).toBeGreaterThan(0);
         expect(clockReads).toBe(readsAtAbort);
         expect(sent).toEqual([]);
     });
