@@ -60,22 +60,37 @@ generations:
     cli_version: unknown
     generator_versions:
       fernapi/fern-typescript-sdk: 3.108.0
-current_generation: 917e80cbf68a4d18c714c577102a0bf26f357136
+  - commit_sha: 02472059d96f6e8eaf3be544bd883141db53abc8
+    tree_hash: d6fe7f91eb6a04eab86253949991a37bb1ce6a38
+    timestamp: 2026-10-31T17:55:28.655Z
+    cli_version: unknown
+    generator_versions:
+      fernapi/fern-typescript-sdk: 3.108.0
+current_generation: 02472059d96f6e8eaf3be544bd883141db53abc8
 patches:
   - id: patch-9b37cd53
-    content_hash: sha256:7ed49a2a2b4c3a71af88da8225a66e481dcbb58b512fb16b3427f1d69cddbae5
+    content_hash: sha256:eebda985f4ac58de869fdf166187244293e8ef2eb653d9a545e9de2461a8860c
     original_commit: 9b37cd531065801be38abacda2412f6236d9e1bc
     original_message: Publish only from version tags that match the package version, using trusted publishing through a registry environment
     original_author: zach <zachary.greathouse@hume.ai>
-    base_generation: 917e80cbf68a4d18c714c577102a0bf26f357136
+    base_generation: 02472059d96f6e8eaf3be544bd883141db53abc8
     files:
       - .github/workflows/ci.yml
     patch_content: |+
       diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
-      index 935ef8c..be0fe51 100644
+      index 935ef8c..7667c32 100644
       --- a/.github/workflows/ci.yml
       +++ b/.github/workflows/ci.yml
-      @@ -47,8 +47,13 @@ jobs:
+      @@ -42,13 +42,22 @@ jobs:
+             - name: Install dependencies
+               run: pnpm install --frozen-lockfile
+       
+      +      # The downmix tests compare the SDK's mixdown with ffmpeg's, which the API uses, and fail in CI without it.
+      +      - name: Install ffmpeg
+      +        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      +
+             - name: Test
+               run: pnpm test
        
          publish:
            needs: [ compile, test ]
@@ -90,7 +105,7 @@ patches:
            permissions:
              contents: read   # Required for checkout
              id-token: write  # Required for OIDC
-      @@ -61,6 +66,16 @@ jobs:
+      @@ -61,6 +70,16 @@ jobs:
                with:
                  node-version: "lts/Krypton"
        
@@ -153,6 +168,10 @@ patches:
               - name: Install dependencies
                 run: pnpm install --frozen-lockfile
 
+              # The downmix tests compare the SDK's mixdown with ffmpeg's, which the API uses, and fail in CI without it.
+              - name: Install ffmpeg
+                run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
               - name: Test
                 run: pnpm test
 
@@ -214,3 +233,1059 @@ patches:
                     fi
                   fi
     user_owned: true
+  - id: patch-8e21e490
+    content_hash: sha256:56ab080a92fbcc1b6bdb6070dcaa2d6abce252b56b93391a9357e7e5960eb215
+    original_commit: 8e21e49062335fd40aaf510acd740283756e42d5
+    original_message: Add helpers that send long recordings in chunks and mix WAV down to 16 kHz mono (#14)
+    original_author: Zachary Greathouse <26175515+zgreathouse@users.noreply.github.com>
+    base_generation: 02472059d96f6e8eaf3be544bd883141db53abc8
+    files:
+      - .github/workflows/ci.yml
+      - package.json
+      - src/api/resources/decisions/client/Client.ts
+    patch_content: |
+      diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+      index 935ef8c..7667c32 100644
+      --- a/.github/workflows/ci.yml
+      +++ b/.github/workflows/ci.yml
+      @@ -42,13 +42,22 @@ jobs:
+             - name: Install dependencies
+               run: pnpm install --frozen-lockfile
+       
+      +      # The downmix tests compare the SDK's mixdown with ffmpeg's, which the API uses, and fail in CI without it.
+      +      - name: Install ffmpeg
+      +        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      +
+             - name: Test
+               run: pnpm test
+       
+         publish:
+           needs: [ compile, test ]
+      -    if: github.event_name == 'push' && contains(github.ref, 'refs/tags/')
+      +    # Only version tags publish. Fern pushes a tag of its own to this repository, and that tag must
+      +    # not release the package.
+      +    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+           runs-on: ubuntu-latest
+      +    environment:
+      +      name: npm
+      +      url: https://www.npmjs.com/package/@humeai/decisions
+           permissions:
+             contents: read   # Required for checkout
+             id-token: write  # Required for OIDC
+      @@ -61,6 +70,16 @@ jobs:
+               with:
+                 node-version: "lts/Krypton"
+       
+      +      # A published version can never be published again, so a tag on the wrong commit must fail
+      +      # here rather than release whatever version that commit holds.
+      +      - name: Check the tag matches the package version
+      +        run: |
+      +          PKG_VERSION=$(node -p "require('./package.json').version")
+      +          if [[ "${GITHUB_REF_NAME}" != "v${PKG_VERSION}" ]]; then
+      +            echo "::error::Tag ${GITHUB_REF_NAME} does not match package version ${PKG_VERSION}."
+      +            exit 1
+      +          fi
+      +
+             - name: Install pnpm
+               uses: pnpm/action-setup@v4
+       
+      diff --git a/package.json b/package.json
+      index 6ec6a2d..80cb22f 100644
+      --- a/package.json
+      +++ b/package.json
+      @@ -56,6 +56,17 @@
+                   },
+                   "default": "./dist/cjs/api/resources/runs/exports.js"
+               },
+      +        "./audio-helpers": {
+      +            "import": {
+      +                "types": "./dist/esm/audio-helpers/index.d.mts",
+      +                "default": "./dist/esm/audio-helpers/index.mjs"
+      +            },
+      +            "require": {
+      +                "types": "./dist/cjs/audio-helpers/index.d.ts",
+      +                "default": "./dist/cjs/audio-helpers/index.js"
+      +            },
+      +            "default": "./dist/cjs/audio-helpers/index.js"
+      +        },
+               "./package.json": "./package.json"
+           },
+           "files": [
+      diff --git a/src/api/resources/decisions/client/Client.ts b/src/api/resources/decisions/client/Client.ts
+      index 2c698bc..882939b 100644
+      --- a/src/api/resources/decisions/client/Client.ts
+      +++ b/src/api/resources/decisions/client/Client.ts
+      @@ -1,5 +1,13 @@
+       // This file was auto-generated by Fern from our API Definition.
+       
+      +import type { iterAudioChunks } from "../../../../audio-helpers/chunks.js";
+      +import { type DownmixOptions, downmixUpload } from "../../../../audio-helpers/files.js";
+      +import {
+      +    type ChunkedDecisionsResult,
+      +    type ChunkResult,
+      +    collectResults,
+      +    sendChunks,
+      +} from "../../../../audio-helpers/results.js";
+       import type { BaseClientOptions, BaseRequestOptions } from "../../../../BaseClient.js";
+       import { type NormalizedClientOptionsWithAuth, normalizeClientOptionsWithAuth } from "../../../../BaseClient.js";
+       import { mergeHeaders, mergeOnlyDefinedHeaders } from "../../../../core/headers.js";
+      @@ -165,10 +173,12 @@ export class DecisionsClient {
+            *     })
+            */
+           public create(
+      -        request: Decisions.DecisionsUpload,
+      +        request: Decisions.DecisionsUpload & DownmixOptions,
+               requestOptions?: DecisionsClient.RequestOptions,
+           ): core.HttpResponsePromise<Decisions.DecisionsResponse> {
+      -        return core.HttpResponsePromise.fromPromise(this.__create(request, requestOptions));
+      +        return core.HttpResponsePromise.fromPromise(
+      +            downmixUpload(request, requestOptions?.abortSignal).then((upload) => this.__create(upload, requestOptions)),
+      +        );
+           }
+       
+           private async __create(
+      @@ -525,4 +535,91 @@ export class DecisionsClient {
+                   "/v0/decisions/file/input_tokens",
+               );
+           }
+      +
+      +    /**
+      +     * Cuts a recording longer than `create` accepts into chunks and sends each chunk to the model in its own `create` request. The recording is never sent as one file. The model processes each chunk independently, hearing only that chunk, so every answer describes its chunk alone and nothing combines the answers across chunks. Each request has its own `runId` and its own billing. Each chunk's result is yielded as soon as its request is done, so it can be saved or reported before the next chunk is sent.
+      +     *
+      +     * The chunks are cut by `iterAudioChunks` in `@humeai/decisions/audio-helpers`, which describes where cuts fall in MP3 and WAV files and how each option works, and are sent one at a time, in order. Each request asks the same questions with the same context. A moment's times are measured from the start of its chunk, so add the chunk's `startMs` to place it in the recording.
+      +     *
+      +     * The whole recording is read into memory before the first request, so that a file that cannot be split is rejected before anything is sent and billed. A WAV file is mixed down before it is cut, as `downmixStrategy` asks. Each chunk is copied only while its request is sent, so memory use stays near the size of the recording and its mixed-down copy. An hour of 16-bit stereo WAV at 48 kHz is about 690 MB, and about 230 MB once mixed down.
+      +     *
+      +     * A request the API rejects, or whose connection fails, does not throw. Its error is recorded on the chunk's result, so check each result's `status`. A chunk whose audio could not be decoded (`audio_decode_failed`) fails alone and the remaining chunks are still sent, but only once an earlier chunk has succeeded; before then, the whole file is the likely cause, so the job stops. Any other error stops the job, and the chunks after it are recorded as not attempted, with no request sent and nothing billed. Rate limits and server errors are retried first, as for `create`, so a job stops on them only once the retries set by `requestOptions` run out. Aborting `requestOptions.abortSignal` does not record an error: iteration throws the `DecisionsError` that `create` throws when aborted, and no further chunk is sent.
+      +     *
+      +     * @param request `request` is sent unchanged with every chunk. `file` is the recording, an MP3 or WAV file, and each chunk is uploaded with the filename and content type it gives. The other fields are the options of `iterAudioChunks`.
+      +     * @param {DecisionsClient.RequestOptions} requestOptions - Request-specific configuration, applied to every chunk's request.
+      +     * @returns Each chunk's position in the recording and its response or error, in the order of the chunks.
+      +     *
+      +     * @throws {TypeError} From this call, if `maxChunkMs`, `startMs` or `endMs` is not a safe integer, or `file` is a string.
+      +     * @throws {RangeError} From this call, if an option is out of range, and from iteration, if the recording cannot be split as requested. Nothing has been sent when either is thrown.
+      +     * @throws {UnsupportedAudioError} From iteration, if the recording is empty or not a file `iterAudioChunks` supports.
+      +     * @throws {@link errors.DecisionsError} From iteration, if `requestOptions.abortSignal` aborts.
+      +     *
+      +     * @example
+      +     *     for await (const chunk of client.decisions.iterCreateChunked({
+      +     *         file: { path: "call.mp3" },
+      +     *         request: {
+      +     *             questions: {
+      +     *                 "agent_glitches": {
+      +     *                     type: "moment",
+      +     *                     instructions: "Where does the agent glitch, slur or sound robotic?"
+      +     *                 }
+      +     *             }
+      +     *         },
+      +     *         maxChunkMs: 300000
+      +     *     })) {
+      +     *         if (chunk.status === "succeeded") {
+      +     *             console.log(chunk.startMs, chunk.response.runId);
+      +     *         } else {
+      +     *             console.log(chunk.startMs, chunk.status, chunk.error);
+      +     *         }
+      +     *     }
+      +     */
+      +    public iterCreateChunked(
+      +        request: Decisions.DecisionsUpload & iterAudioChunks.Options,
+      +        requestOptions?: DecisionsClient.RequestOptions,
+      +    ): AsyncGenerator<ChunkResult, void, undefined> {
+      +        return sendChunks((upload) => this.create(upload, requestOptions), request, requestOptions?.abortSignal);
+      +    }
+      +
+      +    /**
+      +     * Cuts a recording longer than `create` accepts into chunks, sends each chunk to the model in its own `create` request, and resolves with every chunk's result once all are done. The model hears only its chunk, so every answer describes its chunk alone, and each request has its own `runId` and its own billing. {@link DecisionsClient.iterCreateChunked} describes how the chunks are cut and sent, the memory the job uses, and which failures stop it. If the process stops partway through, the responses already received are lost although they were billed, so use `iterCreateChunked` to keep each response as it arrives.
+      +     *
+      +     * A request the API rejects, or whose connection fails, does not reject. Its error is recorded on the chunk, and the responses already received are returned with it, so check `complete` before relying on the result. Aborting `requestOptions.abortSignal` rejects with the `DecisionsError` that `create` rejects with when aborted, and no further chunk is sent. To resume a job that stopped, pass the result's `resumeMs` as `startMs` to a new job with the same `endMs`. Chunks that failed before the stop because their audio could not be decoded are not sent again, so the new job's `complete` covers only the range it sent.
+      +     *
+      +     * @param request `request` is sent unchanged with every chunk. `file` is the recording, an MP3 or WAV file, and each chunk is uploaded with the filename and content type it gives. The other fields are the options of `iterAudioChunks`.
+      +     * @param {DecisionsClient.RequestOptions} requestOptions - Request-specific configuration, applied to every chunk's request.
+      +     * @returns Each chunk's position in the recording and its response or error, in the order of the chunks.
+      +     *
+      +     * @throws {TypeError} If `maxChunkMs`, `startMs` or `endMs` is not a safe integer, or `file` is a string. Nothing has been sent.
+      +     * @throws {RangeError} If an option is out of range or the recording cannot be split as requested. Nothing has been sent.
+      +     * @throws {UnsupportedAudioError} If the recording is empty or not a file `iterAudioChunks` supports.
+      +     * @throws {@link errors.DecisionsError} If `requestOptions.abortSignal` aborts.
+      +     *
+      +     * @example
+      +     *     const result = await client.decisions.createChunked({
+      +     *         file: { path: "call.mp3" },
+      +     *         request: {
+      +     *             questions: {
+      +     *                 "agent_glitches": {
+      +     *                     type: "moment",
+      +     *                     instructions: "Where does the agent glitch, slur or sound robotic?"
+      +     *                 }
+      +     *             }
+      +     *         },
+      +     *         maxChunkMs: 300000
+      +     *     });
+      +     *     for (const chunk of result.chunks) {
+      +     *         if (chunk.status === "succeeded") {
+      +     *             console.log(chunk.startMs, chunk.response.runId);
+      +     *         } else {
+      +     *             console.log(chunk.startMs, chunk.status, chunk.error);
+      +     *         }
+      +     *     }
+      +     */
+      +    public async createChunked(
+      +        request: Decisions.DecisionsUpload & iterAudioChunks.Options,
+      +        requestOptions?: DecisionsClient.RequestOptions,
+      +    ): Promise<ChunkedDecisionsResult> {
+      +        return collectResults(this.iterCreateChunked(request, requestOptions), request.startMs);
+      +    }
+       }
+    theirs_snapshot:
+      .github/workflows/ci.yml: |-
+        name: ci
+
+        on: [push]
+
+        concurrency:
+          group: ${{ github.workflow }}-${{ github.ref }}
+          cancel-in-progress: false
+
+        jobs:
+          compile:
+            runs-on: ubuntu-latest
+
+            steps:
+              - name: Checkout repo
+                uses: actions/checkout@v6
+
+              - name: Set up node
+                uses: actions/setup-node@v6
+
+              - name: Install pnpm
+                uses: pnpm/action-setup@v4
+
+              - name: Install dependencies
+                run: pnpm install --frozen-lockfile
+
+              - name: Compile
+                run: pnpm build
+
+          test:
+            runs-on: ubuntu-latest
+
+            steps:
+              - name: Checkout repo
+                uses: actions/checkout@v6
+
+              - name: Set up node
+                uses: actions/setup-node@v6
+                        
+              - name: Install pnpm
+                uses: pnpm/action-setup@v4
+
+              - name: Install dependencies
+                run: pnpm install --frozen-lockfile
+
+              # The downmix tests compare the SDK's mixdown with ffmpeg's, which the API uses, and fail in CI without it.
+              - name: Install ffmpeg
+                run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+              - name: Test
+                run: pnpm test
+
+          publish:
+            needs: [ compile, test ]
+            # Only version tags publish. Fern pushes a tag of its own to this repository, and that tag must
+            # not release the package.
+            if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+            runs-on: ubuntu-latest
+            environment:
+              name: npm
+              url: https://www.npmjs.com/package/@humeai/decisions
+            permissions:
+              contents: read   # Required for checkout
+              id-token: write  # Required for OIDC
+            steps:
+              - name: Checkout repo
+                uses: actions/checkout@v6
+
+              - name: Set up node
+                uses: actions/setup-node@v6
+                with:
+                  node-version: "lts/Krypton"
+
+              # A published version can never be published again, so a tag on the wrong commit must fail
+              # here rather than release whatever version that commit holds.
+              - name: Check the tag matches the package version
+                run: |
+                  PKG_VERSION=$(node -p "require('./package.json').version")
+                  if [[ "${GITHUB_REF_NAME}" != "v${PKG_VERSION}" ]]; then
+                    echo "::error::Tag ${GITHUB_REF_NAME} does not match package version ${PKG_VERSION}."
+                    exit 1
+                  fi
+
+              - name: Install pnpm
+                uses: pnpm/action-setup@v4
+
+              - name: Install dependencies
+                run: pnpm install --frozen-lockfile
+
+              - name: Build
+                run: pnpm build
+
+              - name: Publish to npm
+                run: |
+                  if [[ ${GITHUB_REF} == *alpha* ]]; then
+                    npm publish --access public --tag alpha
+                  elif [[ ${GITHUB_REF} == *beta* ]]; then
+                    npm publish --access public --tag beta
+                  else
+                    PKG_NAME=$(node -p "require('./package.json').name")
+                    PKG_VERSION=$(node -p "require('./package.json').version")
+                    CURRENT_LATEST=$(npm view "${PKG_NAME}" dist-tags.latest 2>/dev/null || echo "0.0.0")
+                    if npx -y semver@7.8.1 "${PKG_VERSION}" -r "<${CURRENT_LATEST}" > /dev/null 2>&1; then
+                      echo "Publishing ${PKG_VERSION} with --tag backport (current latest is ${CURRENT_LATEST})"
+                      npm publish --access public --tag backport
+                    else
+                      npm publish --access public
+                    fi
+                  fi
+      package.json: |
+        {
+            "name": "@humeai/audio-decisions",
+            "version": "0.1.0",
+            "private": false,
+            "repository": {
+                "type": "git",
+                "url": "git+https://github.com/HumeAI/hume-audio-decisions-typescript-sdk.git"
+            },
+            "license": "MIT",
+            "type": "commonjs",
+            "main": "./dist/cjs/index.js",
+            "module": "./dist/esm/index.mjs",
+            "types": "./dist/cjs/index.d.ts",
+            "exports": {
+                ".": {
+                    "import": {
+                        "types": "./dist/esm/index.d.mts",
+                        "default": "./dist/esm/index.mjs"
+                    },
+                    "require": {
+                        "types": "./dist/cjs/index.d.ts",
+                        "default": "./dist/cjs/index.js"
+                    },
+                    "default": "./dist/cjs/index.js"
+                },
+                "./serialization": {
+                    "import": {
+                        "types": "./dist/esm/serialization/index.d.mts",
+                        "default": "./dist/esm/serialization/index.mjs"
+                    },
+                    "require": {
+                        "types": "./dist/cjs/serialization/index.d.ts",
+                        "default": "./dist/cjs/serialization/index.js"
+                    },
+                    "default": "./dist/cjs/serialization/index.js"
+                },
+                "./decisions": {
+                    "import": {
+                        "types": "./dist/esm/api/resources/decisions/exports.d.mts",
+                        "default": "./dist/esm/api/resources/decisions/exports.mjs"
+                    },
+                    "require": {
+                        "types": "./dist/cjs/api/resources/decisions/exports.d.ts",
+                        "default": "./dist/cjs/api/resources/decisions/exports.js"
+                    },
+                    "default": "./dist/cjs/api/resources/decisions/exports.js"
+                },
+                "./runs": {
+                    "import": {
+                        "types": "./dist/esm/api/resources/runs/exports.d.mts",
+                        "default": "./dist/esm/api/resources/runs/exports.mjs"
+                    },
+                    "require": {
+                        "types": "./dist/cjs/api/resources/runs/exports.d.ts",
+                        "default": "./dist/cjs/api/resources/runs/exports.js"
+                    },
+                    "default": "./dist/cjs/api/resources/runs/exports.js"
+                },
+                "./audio-helpers": {
+                    "import": {
+                        "types": "./dist/esm/audio-helpers/index.d.mts",
+                        "default": "./dist/esm/audio-helpers/index.mjs"
+                    },
+                    "require": {
+                        "types": "./dist/cjs/audio-helpers/index.d.ts",
+                        "default": "./dist/cjs/audio-helpers/index.js"
+                    },
+                    "default": "./dist/cjs/audio-helpers/index.js"
+                },
+                "./package.json": "./package.json"
+            },
+            "files": [
+                "dist",
+                "reference.md",
+                "README.md",
+                "LICENSE"
+            ],
+            "scripts": {
+                "format": "biome format --write --skip-parse-errors --no-errors-on-unmatched --max-diagnostics=none",
+                "format:check": "biome format --skip-parse-errors --no-errors-on-unmatched --max-diagnostics=none",
+                "lint": "biome lint --skip-parse-errors --no-errors-on-unmatched --max-diagnostics=none",
+                "lint:fix": "biome lint --fix --unsafe --skip-parse-errors --no-errors-on-unmatched --max-diagnostics=none",
+                "check": "biome check --skip-parse-errors --no-errors-on-unmatched --max-diagnostics=none",
+                "check:fix": "biome check --fix --unsafe --skip-parse-errors --no-errors-on-unmatched --max-diagnostics=none",
+                "build": "pnpm build:cjs && pnpm build:esm",
+                "build:cjs": "tsc --project ./tsconfig.cjs.json",
+                "build:esm": "tsc --project ./tsconfig.esm.json && node scripts/rename-to-esm-files.js dist/esm",
+                "test": "vitest",
+                "test:unit": "vitest --project unit",
+                "test:wire": "vitest --project wire"
+            },
+            "dependencies": {},
+            "devDependencies": {
+                "webpack": "^5.105.4",
+                "ts-loader": "^9.5.4",
+                "vitest": "^4.1.1",
+                "msw": "2.11.2",
+                "@types/node": "^20.0.0",
+                "typescript": "~5.9.3",
+                "@biomejs/biome": "2.4.10"
+            },
+            "browser": {
+                "fs": false,
+                "os": false,
+                "path": false,
+                "stream": false,
+                "crypto": false
+            },
+            "packageManager": "pnpm@10.33.0",
+            "engines": {
+                "node": ">=18.0.0"
+            },
+            "sideEffects": false,
+            "description": "A TypeScript SDK for the Audio Decisions API",
+            "homepage": "https://dev.hume.ai/decisions/docs/overview"
+        }
+      src/api/resources/decisions/client/Client.ts: |
+        // This file was auto-generated by Fern from our API Definition.
+
+        import type { iterAudioChunks } from "../../../../audio-helpers/chunks.js";
+        import { type DownmixOptions, downmixUpload } from "../../../../audio-helpers/files.js";
+        import {
+            type ChunkedDecisionsResult,
+            type ChunkResult,
+            collectResults,
+            sendChunks,
+        } from "../../../../audio-helpers/results.js";
+        import type { BaseClientOptions, BaseRequestOptions } from "../../../../BaseClient.js";
+        import { type NormalizedClientOptionsWithAuth, normalizeClientOptionsWithAuth } from "../../../../BaseClient.js";
+        import { mergeHeaders, mergeOnlyDefinedHeaders } from "../../../../core/headers.js";
+        import * as core from "../../../../core/index.js";
+        import { toJson } from "../../../../core/json.js";
+        import { mergeAdditionalBodyParameters } from "../../../../core/requestBody.js";
+        import * as environments from "../../../../environments.js";
+        import { handleNonStatusCodeError } from "../../../../errors/handleNonStatusCodeError.js";
+        import * as errors from "../../../../errors/index.js";
+        import * as serializers from "../../../../serialization/index.js";
+        import { DecisionsRequest } from "../../../../serialization/types/DecisionsRequest.js";
+        import * as Decisions from "../../../index.js";
+
+        export declare namespace DecisionsClient {
+            export type Options = BaseClientOptions;
+
+            export interface RequestOptions extends BaseRequestOptions {}
+        }
+
+        /**
+         * Evaluate one audio file against one or more questions, or estimate the input tokens of a request.
+         */
+        export class DecisionsClient {
+            protected readonly _options: NormalizedClientOptionsWithAuth<DecisionsClient.Options>;
+
+            constructor(options: DecisionsClient.Options = {}) {
+                this._options = normalizeClientOptionsWithAuth(options);
+            }
+
+            /**
+             * Asks questions about one audio file and returns an answer to each, with the `run_id` of the model run that produced them. Each answer estimates how human raters would respond, so you choose the thresholds for acting on it.
+             *
+             * All the questions in a request are answered in one model inference, so an answer can change when other questions are added, removed or reordered. To compare answers across recordings, send the same questions in the same order. To evaluate several files, send one request per file.
+             *
+             * @param {Decisions.DecisionsUpload} request
+             * @param {DecisionsClient.RequestOptions} requestOptions - Request-specific configuration.
+             *
+             * @throws {@link Decisions.BadRequestError}
+             * @throws {@link Decisions.UnauthorizedError}
+             * @throws {@link Decisions.PaymentRequiredError}
+             * @throws {@link Decisions.ForbiddenError}
+             * @throws {@link Decisions.ContentTooLargeError}
+             * @throws {@link Decisions.UnsupportedMediaTypeError}
+             * @throws {@link Decisions.TooManyRequestsError}
+             * @throws {@link Decisions.InternalServerError}
+             * @throws {@link Decisions.ServiceUnavailableError}
+             * @throws {@link errors.DecisionsError}
+             * @throws {@link errors.DecisionsTimeoutError}
+             *
+             * @example
+             *     import { createReadStream } from "fs";
+             *     await client.decisions.create({
+             *         file: fs.createReadStream("/path/to/your/file"),
+             *         request: {
+             *             context: "A simulated test call in which a voice AI agent helps a caller reschedule an appointment. Both voices are synthetic, and the agent speaks first.",
+             *             questions: {
+             *                 "talks_over_caller": {
+             *                     type: "noul",
+             *                     instructions: "Does the agent talk over the caller?"
+             *                 },
+             *                 "agent_tone": {
+             *                     type: "choice",
+             *                     instructions: "Which best describes the tone of the agent?",
+             *                     criteria: [{
+             *                             name: "warm",
+             *                             description: "Warm and friendly toward the caller"
+             *                         }, {
+             *                             name: "neutral",
+             *                             description: "Polite but impersonal"
+             *                         }, {
+             *                             name: "curt",
+             *                             description: "Short or dismissive with the caller"
+             *                         }]
+             *                 },
+             *                 "agent_naturalness": {
+             *                     type: "score",
+             *                     instructions: "How natural does the agent sound?",
+             *                     criteria: ["Not at all", "2", "3", "4", "Extremely"]
+             *                 },
+             *                 "agent_glitches": {
+             *                     type: "moment",
+             *                     instructions: "Where does the agent glitch, slur or sound robotic?"
+             *                 }
+             *             }
+             *         }
+             *     })
+             *
+             * @example
+             *     import { createReadStream } from "fs";
+             *     await client.decisions.create({
+             *         file: fs.createReadStream("/path/to/your/file"),
+             *         request: {
+             *             context: "Speech generated by an instruction-following text-to-speech model. The prompt asked for a whispered read.",
+             *             questions: {
+             *                 "whispered": {
+             *                     type: "noul",
+             *                     instructions: "Is the voice whispering?"
+             *                 }
+             *             }
+             *         }
+             *     })
+             *
+             * @example
+             *     import { createReadStream } from "fs";
+             *     await client.decisions.create({
+             *         file: fs.createReadStream("/path/to/your/file"),
+             *         request: {
+             *             context: "A clip from a licensed corpus of scripted speech by consenting voice actors, being labeled to train an expressive text-to-speech model.",
+             *             questions: {
+             *                 "emotion": {
+             *                     type: "choice",
+             *                     instructions: "Which emotion does the speaker convey?",
+             *                     criteria: [{
+             *                             name: "happiness",
+             *                             description: "Happiness or amusement"
+             *                         }, {
+             *                             name: "sadness",
+             *                             description: "Sadness or grief"
+             *                         }, {
+             *                             name: "anger",
+             *                             description: "Anger, whether shouted or held back"
+             *                         }, {
+             *                             name: "fear",
+             *                             description: "Fear or anxiety"
+             *                         }, {
+             *                             name: "neutral",
+             *                             description: "No clear emotion"
+             *                         }]
+             *                 }
+             *             }
+             *         }
+             *     })
+             *
+             * @example
+             *     import { createReadStream } from "fs";
+             *     await client.decisions.create({
+             *         file: fs.createReadStream("/path/to/your/file"),
+             *         request: {
+             *             context: "Output from a text-to-speech model under evaluation, reading a product announcement.",
+             *             questions: {
+             *                 "naturalness": {
+             *                     type: "score",
+             *                     instructions: "How natural does the voice sound?",
+             *                     criteria: ["Not at all", "2", "3", "4", "Extremely"]
+             *                 }
+             *             }
+             *         }
+             *     })
+             *
+             * @example
+             *     import { createReadStream } from "fs";
+             *     await client.decisions.create({
+             *         file: fs.createReadStream("/path/to/your/file"),
+             *         request: {
+             *             context: "A clip from a licensed corpus of scripted speech by consenting voice actors, being labeled to train an expressive text-to-speech model.",
+             *             questions: {
+             *                 "vocal_bursts": {
+             *                     type: "moment",
+             *                     instructions: "Where does the speaker laugh, sigh, gasp or make another vocal burst?"
+             *                 }
+             *             }
+             *         }
+             *     })
+             */
+            public create(
+                request: Decisions.DecisionsUpload & DownmixOptions,
+                requestOptions?: DecisionsClient.RequestOptions,
+            ): core.HttpResponsePromise<Decisions.DecisionsResponse> {
+                return core.HttpResponsePromise.fromPromise(
+                    downmixUpload(request, requestOptions?.abortSignal).then((upload) => this.__create(upload, requestOptions)),
+                );
+            }
+
+            private async __create(
+                request: Decisions.DecisionsUpload,
+                requestOptions?: DecisionsClient.RequestOptions,
+            ): Promise<core.WithRawResponse<Decisions.DecisionsResponse>> {
+                const _body = await core.newFormData();
+                _body.append(
+                    "request",
+                    toJson(
+                        DecisionsRequest.jsonOrThrow(request.request, { unrecognizedObjectKeys: "strip", omitUndefined: true }),
+                    ),
+                );
+                await _body.appendFile("file", request.file);
+                const _maybeEncodedRequest = await _body.getRequest();
+                const _authRequest: core.AuthRequest = await this._options.authProvider.getAuthRequest();
+                const _headers: core.Fetcher.Args["headers"] = mergeHeaders(
+                    _authRequest.headers,
+                    this._options?.headers,
+                    mergeOnlyDefinedHeaders({ ..._maybeEncodedRequest.headers }),
+                    requestOptions?.headers,
+                );
+                const _response = await core.fetcher({
+                    url: core.url.join(
+                        (await core.Supplier.get(this._options.baseUrl)) ??
+                            (await core.Supplier.get(this._options.environment)) ??
+                            environments.DecisionsEnvironment.Production,
+                        "v0/decisions/file",
+                    ),
+                    method: "POST",
+                    headers: _headers,
+                    queryString: core.url.queryBuilder().mergeAdditional(requestOptions?.queryParams).build(),
+                    requestType: "file",
+                    duplex: _maybeEncodedRequest.duplex,
+                    body: _maybeEncodedRequest.body,
+                    timeoutMs: (requestOptions?.timeoutInSeconds ?? this._options?.timeoutInSeconds ?? 60) * 1000,
+                    maxRetries: requestOptions?.maxRetries ?? this._options?.maxRetries,
+                    abortSignal: requestOptions?.abortSignal,
+                    fetchFn: this._options?.fetch,
+                    logging: this._options.logging,
+                });
+                if (_response.ok) {
+                    return {
+                        data: serializers.DecisionsResponse.parseOrThrow(_response.body, {
+                            unrecognizedObjectKeys: "passthrough",
+                            allowUnrecognizedUnionMembers: true,
+                            allowUnrecognizedEnumValues: true,
+                            skipValidation: true,
+                            breadcrumbsPrefix: ["response"],
+                        }),
+                        rawResponse: _response.rawResponse,
+                    };
+                }
+
+                if (_response.error.reason === "status-code") {
+                    switch (_response.error.statusCode) {
+                        case 400:
+                            throw new Decisions.BadRequestError(
+                                serializers.Error_.parseOrThrow(_response.error.body, {
+                                    unrecognizedObjectKeys: "passthrough",
+                                    allowUnrecognizedUnionMembers: true,
+                                    allowUnrecognizedEnumValues: true,
+                                    skipValidation: true,
+                                    breadcrumbsPrefix: ["response"],
+                                }),
+                                _response.rawResponse,
+                            );
+                        case 401:
+                            throw new Decisions.UnauthorizedError(
+                                serializers.GatewayError.parseOrThrow(_response.error.body, {
+                                    unrecognizedObjectKeys: "passthrough",
+                                    allowUnrecognizedUnionMembers: true,
+                                    allowUnrecognizedEnumValues: true,
+                                    skipValidation: true,
+                                    breadcrumbsPrefix: ["response"],
+                                }),
+                                _response.rawResponse,
+                            );
+                        case 402:
+                            throw new Decisions.PaymentRequiredError(
+                                serializers.Error_.parseOrThrow(_response.error.body, {
+                                    unrecognizedObjectKeys: "passthrough",
+                                    allowUnrecognizedUnionMembers: true,
+                                    allowUnrecognizedEnumValues: true,
+                                    skipValidation: true,
+                                    breadcrumbsPrefix: ["response"],
+                                }),
+                                _response.rawResponse,
+                            );
+                        case 403:
+                            throw new Decisions.ForbiddenError(
+                                serializers.Error_.parseOrThrow(_response.error.body, {
+                                    unrecognizedObjectKeys: "passthrough",
+                                    allowUnrecognizedUnionMembers: true,
+                                    allowUnrecognizedEnumValues: true,
+                                    skipValidation: true,
+                                    breadcrumbsPrefix: ["response"],
+                                }),
+                                _response.rawResponse,
+                            );
+                        case 413:
+                            throw new Decisions.ContentTooLargeError(
+                                serializers.Error_.parseOrThrow(_response.error.body, {
+                                    unrecognizedObjectKeys: "passthrough",
+                                    allowUnrecognizedUnionMembers: true,
+                                    allowUnrecognizedEnumValues: true,
+                                    skipValidation: true,
+                                    breadcrumbsPrefix: ["response"],
+                                }),
+                                _response.rawResponse,
+                            );
+                        case 415:
+                            throw new Decisions.UnsupportedMediaTypeError(
+                                serializers.Error_.parseOrThrow(_response.error.body, {
+                                    unrecognizedObjectKeys: "passthrough",
+                                    allowUnrecognizedUnionMembers: true,
+                                    allowUnrecognizedEnumValues: true,
+                                    skipValidation: true,
+                                    breadcrumbsPrefix: ["response"],
+                                }),
+                                _response.rawResponse,
+                            );
+                        case 429:
+                            throw new Decisions.TooManyRequestsError(
+                                serializers.GatewayError.parseOrThrow(_response.error.body, {
+                                    unrecognizedObjectKeys: "passthrough",
+                                    allowUnrecognizedUnionMembers: true,
+                                    allowUnrecognizedEnumValues: true,
+                                    skipValidation: true,
+                                    breadcrumbsPrefix: ["response"],
+                                }),
+                                _response.rawResponse,
+                            );
+                        case 500:
+                            throw new Decisions.InternalServerError(
+                                serializers.Error_.parseOrThrow(_response.error.body, {
+                                    unrecognizedObjectKeys: "passthrough",
+                                    allowUnrecognizedUnionMembers: true,
+                                    allowUnrecognizedEnumValues: true,
+                                    skipValidation: true,
+                                    breadcrumbsPrefix: ["response"],
+                                }),
+                                _response.rawResponse,
+                            );
+                        case 503:
+                            throw new Decisions.ServiceUnavailableError(
+                                serializers.Error_.parseOrThrow(_response.error.body, {
+                                    unrecognizedObjectKeys: "passthrough",
+                                    allowUnrecognizedUnionMembers: true,
+                                    allowUnrecognizedEnumValues: true,
+                                    skipValidation: true,
+                                    breadcrumbsPrefix: ["response"],
+                                }),
+                                _response.rawResponse,
+                            );
+                        default:
+                            throw new errors.DecisionsError({
+                                statusCode: _response.error.statusCode,
+                                body: _response.error.body,
+                                rawResponse: _response.rawResponse,
+                            });
+                    }
+                }
+
+                return handleNonStatusCodeError(_response.error, _response.rawResponse, "POST", "/v0/decisions/file");
+            }
+
+            /**
+             * Estimates the input tokens of a decisions request from its questions and the duration of its audio. The body takes the same `context` and `questions` as the `request` part of a `POST /v0/decisions/file` request, plus `audio_duration_ms`, the duration of the audio file in milliseconds.
+             *
+             * @param {Decisions.InputTokensRequest} request
+             * @param {DecisionsClient.RequestOptions} requestOptions - Request-specific configuration.
+             *
+             * @throws {@link Decisions.BadRequestError}
+             * @throws {@link Decisions.UnauthorizedError}
+             * @throws {@link Decisions.ForbiddenError}
+             * @throws {@link Decisions.UnsupportedMediaTypeError}
+             * @throws {@link Decisions.TooManyRequestsError}
+             * @throws {@link Decisions.InternalServerError}
+             * @throws {@link errors.DecisionsError}
+             * @throws {@link errors.DecisionsTimeoutError}
+             *
+             * @example
+             *     await client.decisions.inputTokens({
+             *         audioDurationMs: 135000,
+             *         context: "A simulated test call in which a voice AI agent helps a caller reschedule an appointment. Both voices are synthetic, and the agent speaks first.",
+             *         questions: {
+             *             "talks_over_caller": {
+             *                 type: "noul",
+             *                 instructions: "Does the agent talk over the caller?"
+             *             },
+             *             "agent_tone": {
+             *                 type: "choice",
+             *                 instructions: "Which best describes the tone of the agent?",
+             *                 criteria: [{
+             *                         name: "warm",
+             *                         description: "Warm and friendly toward the caller"
+             *                     }, {
+             *                         name: "neutral",
+             *                         description: "Polite but impersonal"
+             *                     }, {
+             *                         name: "curt",
+             *                         description: "Short or dismissive with the caller"
+             *                     }]
+             *             },
+             *             "agent_naturalness": {
+             *                 type: "score",
+             *                 instructions: "How natural does the agent sound?",
+             *                 criteria: ["Not at all", "2", "3", "4", "Extremely"]
+             *             },
+             *             "agent_glitches": {
+             *                 type: "moment",
+             *                 instructions: "Where does the agent glitch, slur or sound robotic?"
+             *             }
+             *         }
+             *     })
+             */
+            public inputTokens(
+                request: Decisions.InputTokensRequest,
+                requestOptions?: DecisionsClient.RequestOptions,
+            ): core.HttpResponsePromise<Decisions.InputTokensResponse> {
+                return core.HttpResponsePromise.fromPromise(this.__inputTokens(request, requestOptions));
+            }
+
+            private async __inputTokens(
+                request: Decisions.InputTokensRequest,
+                requestOptions?: DecisionsClient.RequestOptions,
+            ): Promise<core.WithRawResponse<Decisions.InputTokensResponse>> {
+                const _authRequest: core.AuthRequest = await this._options.authProvider.getAuthRequest();
+                const _headers: core.Fetcher.Args["headers"] = mergeHeaders(
+                    _authRequest.headers,
+                    this._options?.headers,
+                    requestOptions?.headers,
+                );
+                const _response = await core.fetcher({
+                    url: core.url.join(
+                        (await core.Supplier.get(this._options.baseUrl)) ??
+                            (await core.Supplier.get(this._options.environment)) ??
+                            environments.DecisionsEnvironment.Production,
+                        "v0/decisions/file/input_tokens",
+                    ),
+                    method: "POST",
+                    headers: _headers,
+                    contentType: "application/json",
+                    queryString: core.url.queryBuilder().mergeAdditional(requestOptions?.queryParams).build(),
+                    requestType: "json",
+                    body: mergeAdditionalBodyParameters(
+                        serializers.InputTokensRequest.jsonOrThrow(request, {
+                            unrecognizedObjectKeys: "strip",
+                            omitUndefined: true,
+                        }),
+                        requestOptions?.additionalBodyParameters,
+                    ),
+                    timeoutMs: (requestOptions?.timeoutInSeconds ?? this._options?.timeoutInSeconds ?? 60) * 1000,
+                    maxRetries: requestOptions?.maxRetries ?? this._options?.maxRetries,
+                    abortSignal: requestOptions?.abortSignal,
+                    fetchFn: this._options?.fetch,
+                    logging: this._options.logging,
+                });
+                if (_response.ok) {
+                    return {
+                        data: serializers.InputTokensResponse.parseOrThrow(_response.body, {
+                            unrecognizedObjectKeys: "passthrough",
+                            allowUnrecognizedUnionMembers: true,
+                            allowUnrecognizedEnumValues: true,
+                            skipValidation: true,
+                            breadcrumbsPrefix: ["response"],
+                        }),
+                        rawResponse: _response.rawResponse,
+                    };
+                }
+
+                if (_response.error.reason === "status-code") {
+                    switch (_response.error.statusCode) {
+                        case 400:
+                            throw new Decisions.BadRequestError(
+                                serializers.Error_.parseOrThrow(_response.error.body, {
+                                    unrecognizedObjectKeys: "passthrough",
+                                    allowUnrecognizedUnionMembers: true,
+                                    allowUnrecognizedEnumValues: true,
+                                    skipValidation: true,
+                                    breadcrumbsPrefix: ["response"],
+                                }),
+                                _response.rawResponse,
+                            );
+                        case 401:
+                            throw new Decisions.UnauthorizedError(
+                                serializers.GatewayError.parseOrThrow(_response.error.body, {
+                                    unrecognizedObjectKeys: "passthrough",
+                                    allowUnrecognizedUnionMembers: true,
+                                    allowUnrecognizedEnumValues: true,
+                                    skipValidation: true,
+                                    breadcrumbsPrefix: ["response"],
+                                }),
+                                _response.rawResponse,
+                            );
+                        case 403:
+                            throw new Decisions.ForbiddenError(
+                                serializers.Error_.parseOrThrow(_response.error.body, {
+                                    unrecognizedObjectKeys: "passthrough",
+                                    allowUnrecognizedUnionMembers: true,
+                                    allowUnrecognizedEnumValues: true,
+                                    skipValidation: true,
+                                    breadcrumbsPrefix: ["response"],
+                                }),
+                                _response.rawResponse,
+                            );
+                        case 415:
+                            throw new Decisions.UnsupportedMediaTypeError(
+                                serializers.Error_.parseOrThrow(_response.error.body, {
+                                    unrecognizedObjectKeys: "passthrough",
+                                    allowUnrecognizedUnionMembers: true,
+                                    allowUnrecognizedEnumValues: true,
+                                    skipValidation: true,
+                                    breadcrumbsPrefix: ["response"],
+                                }),
+                                _response.rawResponse,
+                            );
+                        case 429:
+                            throw new Decisions.TooManyRequestsError(
+                                serializers.GatewayError.parseOrThrow(_response.error.body, {
+                                    unrecognizedObjectKeys: "passthrough",
+                                    allowUnrecognizedUnionMembers: true,
+                                    allowUnrecognizedEnumValues: true,
+                                    skipValidation: true,
+                                    breadcrumbsPrefix: ["response"],
+                                }),
+                                _response.rawResponse,
+                            );
+                        case 500:
+                            throw new Decisions.InternalServerError(
+                                serializers.Error_.parseOrThrow(_response.error.body, {
+                                    unrecognizedObjectKeys: "passthrough",
+                                    allowUnrecognizedUnionMembers: true,
+                                    allowUnrecognizedEnumValues: true,
+                                    skipValidation: true,
+                                    breadcrumbsPrefix: ["response"],
+                                }),
+                                _response.rawResponse,
+                            );
+                        default:
+                            throw new errors.DecisionsError({
+                                statusCode: _response.error.statusCode,
+                                body: _response.error.body,
+                                rawResponse: _response.rawResponse,
+                            });
+                    }
+                }
+
+                return handleNonStatusCodeError(
+                    _response.error,
+                    _response.rawResponse,
+                    "POST",
+                    "/v0/decisions/file/input_tokens",
+                );
+            }
+
+            /**
+             * Cuts a recording longer than `create` accepts into chunks and sends each chunk to the model in its own `create` request. The recording is never sent as one file. The model processes each chunk independently, hearing only that chunk, so every answer describes its chunk alone and nothing combines the answers across chunks. Each request has its own `runId` and its own billing. Each chunk's result is yielded as soon as its request is done, so it can be saved or reported before the next chunk is sent.
+             *
+             * The chunks are cut by `iterAudioChunks` in `@humeai/decisions/audio-helpers`, which describes where cuts fall in MP3 and WAV files and how each option works, and are sent one at a time, in order. Each request asks the same questions with the same context. A moment's times are measured from the start of its chunk, so add the chunk's `startMs` to place it in the recording.
+             *
+             * The whole recording is read into memory before the first request, so that a file that cannot be split is rejected before anything is sent and billed. A WAV file is mixed down before it is cut, as `downmixStrategy` asks. Each chunk is copied only while its request is sent, so memory use stays near the size of the recording and its mixed-down copy. An hour of 16-bit stereo WAV at 48 kHz is about 690 MB, and about 230 MB once mixed down.
+             *
+             * A request the API rejects, or whose connection fails, does not throw. Its error is recorded on the chunk's result, so check each result's `status`. A chunk whose audio could not be decoded (`audio_decode_failed`) fails alone and the remaining chunks are still sent, but only once an earlier chunk has succeeded; before then, the whole file is the likely cause, so the job stops. Any other error stops the job, and the chunks after it are recorded as not attempted, with no request sent and nothing billed. Rate limits and server errors are retried first, as for `create`, so a job stops on them only once the retries set by `requestOptions` run out. Aborting `requestOptions.abortSignal` does not record an error: iteration throws the `DecisionsError` that `create` throws when aborted, and no further chunk is sent.
+             *
+             * @param request `request` is sent unchanged with every chunk. `file` is the recording, an MP3 or WAV file, and each chunk is uploaded with the filename and content type it gives. The other fields are the options of `iterAudioChunks`.
+             * @param {DecisionsClient.RequestOptions} requestOptions - Request-specific configuration, applied to every chunk's request.
+             * @returns Each chunk's position in the recording and its response or error, in the order of the chunks.
+             *
+             * @throws {TypeError} From this call, if `maxChunkMs`, `startMs` or `endMs` is not a safe integer, or `file` is a string.
+             * @throws {RangeError} From this call, if an option is out of range, and from iteration, if the recording cannot be split as requested. Nothing has been sent when either is thrown.
+             * @throws {UnsupportedAudioError} From iteration, if the recording is empty or not a file `iterAudioChunks` supports.
+             * @throws {@link errors.DecisionsError} From iteration, if `requestOptions.abortSignal` aborts.
+             *
+             * @example
+             *     for await (const chunk of client.decisions.iterCreateChunked({
+             *         file: { path: "call.mp3" },
+             *         request: {
+             *             questions: {
+             *                 "agent_glitches": {
+             *                     type: "moment",
+             *                     instructions: "Where does the agent glitch, slur or sound robotic?"
+             *                 }
+             *             }
+             *         },
+             *         maxChunkMs: 300000
+             *     })) {
+             *         if (chunk.status === "succeeded") {
+             *             console.log(chunk.startMs, chunk.response.runId);
+             *         } else {
+             *             console.log(chunk.startMs, chunk.status, chunk.error);
+             *         }
+             *     }
+             */
+            public iterCreateChunked(
+                request: Decisions.DecisionsUpload & iterAudioChunks.Options,
+                requestOptions?: DecisionsClient.RequestOptions,
+            ): AsyncGenerator<ChunkResult, void, undefined> {
+                return sendChunks((upload) => this.create(upload, requestOptions), request, requestOptions?.abortSignal);
+            }
+
+            /**
+             * Cuts a recording longer than `create` accepts into chunks, sends each chunk to the model in its own `create` request, and resolves with every chunk's result once all are done. The model hears only its chunk, so every answer describes its chunk alone, and each request has its own `runId` and its own billing. {@link DecisionsClient.iterCreateChunked} describes how the chunks are cut and sent, the memory the job uses, and which failures stop it. If the process stops partway through, the responses already received are lost although they were billed, so use `iterCreateChunked` to keep each response as it arrives.
+             *
+             * A request the API rejects, or whose connection fails, does not reject. Its error is recorded on the chunk, and the responses already received are returned with it, so check `complete` before relying on the result. Aborting `requestOptions.abortSignal` rejects with the `DecisionsError` that `create` rejects with when aborted, and no further chunk is sent. To resume a job that stopped, pass the result's `resumeMs` as `startMs` to a new job with the same `endMs`. Chunks that failed before the stop because their audio could not be decoded are not sent again, so the new job's `complete` covers only the range it sent.
+             *
+             * @param request `request` is sent unchanged with every chunk. `file` is the recording, an MP3 or WAV file, and each chunk is uploaded with the filename and content type it gives. The other fields are the options of `iterAudioChunks`.
+             * @param {DecisionsClient.RequestOptions} requestOptions - Request-specific configuration, applied to every chunk's request.
+             * @returns Each chunk's position in the recording and its response or error, in the order of the chunks.
+             *
+             * @throws {TypeError} If `maxChunkMs`, `startMs` or `endMs` is not a safe integer, or `file` is a string. Nothing has been sent.
+             * @throws {RangeError} If an option is out of range or the recording cannot be split as requested. Nothing has been sent.
+             * @throws {UnsupportedAudioError} If the recording is empty or not a file `iterAudioChunks` supports.
+             * @throws {@link errors.DecisionsError} If `requestOptions.abortSignal` aborts.
+             *
+             * @example
+             *     const result = await client.decisions.createChunked({
+             *         file: { path: "call.mp3" },
+             *         request: {
+             *             questions: {
+             *                 "agent_glitches": {
+             *                     type: "moment",
+             *                     instructions: "Where does the agent glitch, slur or sound robotic?"
+             *                 }
+             *             }
+             *         },
+             *         maxChunkMs: 300000
+             *     });
+             *     for (const chunk of result.chunks) {
+             *         if (chunk.status === "succeeded") {
+             *             console.log(chunk.startMs, chunk.response.runId);
+             *         } else {
+             *             console.log(chunk.startMs, chunk.status, chunk.error);
+             *         }
+             *     }
+             */
+            public async createChunked(
+                request: Decisions.DecisionsUpload & iterAudioChunks.Options,
+                requestOptions?: DecisionsClient.RequestOptions,
+            ): Promise<ChunkedDecisionsResult> {
+                return collectResults(this.iterCreateChunked(request, requestOptions), request.startMs);
+            }
+        }

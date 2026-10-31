@@ -1,6 +1,6 @@
-# Hume Audio Decisions TypeScript SDK
+# Audio Decisions TypeScript SDK
 
-The official TypeScript client for the [Hume Audio Decisions API](https://dev.hume.ai/decisions/docs/overview). The API answers questions about audio that you write in plain language. Send a recording with your questions, and each answer comes back as probabilities that estimate how human raters would respond, which your code can threshold, rank, or combine.
+The official TypeScript client for the [Audio Decisions API](https://dev.hume.ai/decisions/docs/overview). The API answers questions about audio that you write in plain language. Send a recording with your questions, and each answer comes back as probabilities that estimate how human raters would respond, which your code can threshold, rank, or combine.
 
 The SDK provides clients for the decisions and run endpoints, TypeScript types for every question, answer, and response, and API key authentication. It ships CommonJS and ES module builds.
 
@@ -20,7 +20,7 @@ Node.js 18 or later.
 ## Installation
 
 ```bash
-npm install @humeai/decisions
+npm install @humeai/audio-decisions
 ```
 
 ## Authentication
@@ -28,7 +28,7 @@ npm install @humeai/decisions
 Every request carries your API key in the `X-Hume-Api-Key` header. Pass the key to the client, or set the `HUME_API_KEY` environment variable and construct the client without arguments.
 
 ```typescript
-import { DecisionsClient } from "@humeai/decisions";
+import { DecisionsClient } from "@humeai/audio-decisions";
 
 const client = new DecisionsClient({ apiKey: "YOUR_API_KEY" });
 ```
@@ -52,7 +52,7 @@ MP3 files and WAV files the SDK cannot read, such as compressed WAV, are always 
 This request asks two questions about a simulated call with a voice AI agent: whether the agent talks over the caller, and how natural the agent sounds on a five-point scale.
 
 ```typescript
-import { DecisionsClient } from "@humeai/decisions";
+import { DecisionsClient } from "@humeai/audio-decisions";
 
 const client = new DecisionsClient();
 
@@ -104,7 +104,7 @@ Each question is keyed by an ID you choose, and its `type` names its primitive, 
 Request and response types are exported under the `Decisions` namespace.
 
 ```typescript
-import type { Decisions } from "@humeai/decisions";
+import type { Decisions } from "@humeai/audio-decisions";
 
 const request: Decisions.DecisionsRequest = {
     context: "A simulated test call in which a voice AI agent helps a caller reschedule an appointment. Both voices are synthetic, and the agent speaks first.",
@@ -191,7 +191,7 @@ console.log(`${count.inputTokens} input tokens`);
 `decisions.createChunked` cuts a recording into chunks no longer than `maxChunkMs` and sends each chunk in its own `create` request, one at a time and in order, with the same questions, context, and request options. The model hears only the chunk it answers about, and each chunk gets its own response, `runId`, and bill. Nothing combines the answers across chunks.
 
 ```typescript
-import { DecisionsClient } from "@humeai/decisions";
+import { DecisionsClient } from "@humeai/audio-decisions";
 
 const client = new DecisionsClient();
 
@@ -287,7 +287,7 @@ To resume a job that stopped, call `createChunked` again with `startMs: result.r
 
 ### Memory
 
-The whole recording is read into memory, and a WAV file is mixed down, before the first request, so a file that cannot be split is rejected before anything is billed, with an `UnsupportedAudioError` from `@humeai/decisions/audio-helpers` when it is empty or not a supported MP3 or WAV file. An hour of 16-bit stereo WAV at 48 kHz is about 690 MB, plus about 230 MB for the mixed-down copy.
+The whole recording is read into memory, and a WAV file is mixed down, before the first request, so a file that cannot be split is rejected before anything is billed, with an `UnsupportedAudioError` from `@humeai/audio-decisions/audio-helpers` when it is empty or not a supported MP3 or WAV file. An hour of 16-bit stereo WAV at 48 kHz is about 690 MB, plus about 230 MB for the mixed-down copy.
 
 ### Saving results as they arrive
 
@@ -295,7 +295,7 @@ The whole recording is read into memory, and a WAV file is mixed down, before th
 
 ```typescript
 import { writeFile } from "node:fs/promises";
-import { DecisionsClient } from "@humeai/decisions";
+import { DecisionsClient } from "@humeai/audio-decisions";
 
 const client = new DecisionsClient();
 
@@ -321,18 +321,18 @@ for await (const chunk of client.decisions.iterCreateChunked({
 
 To resume such a job, keep the results it yields.
 
-1. When a chunk stopped the job, `new ChunkedDecisionsResult(results, startMs).resumeMs` gives where to resume, with `ChunkedDecisionsResult` from `@humeai/decisions/audio-helpers` and the `startMs` the job was given.
+1. When a chunk stopped the job, `new ChunkedDecisionsResult(results, startMs).resumeMs` gives where to resume, with `ChunkedDecisionsResult` from `@humeai/audio-decisions/audio-helpers` and the `startMs` the job was given.
 2. When your process stopped instead, `resumeMs` is undefined. Resume at the `endMs` of the last chunk you have a result for, not at the `startMs` of the chunk after it, which for an MP3 file includes frames repeated from the chunk you already have.
 
 In both cases, pass the same `endMs` as the job that stopped. Chunks that failed because their audio could not be decoded are not sent again, including the last chunk you have a result for, so check your saved results for them.
 
 ### Sending chunks yourself
 
-`iterAudioChunks` in `@humeai/decisions/audio-helpers` cuts a recording the same way, mixdown included, and yields each chunk's bytes with its `startMs` and `endMs`. Use it to send chunks some other way, such as several at a time:
+`iterAudioChunks` in `@humeai/audio-decisions/audio-helpers` cuts a recording the same way, mixdown included, and yields each chunk's bytes with its `startMs` and `endMs`. Use it to send chunks some other way, such as several at a time:
 
 ```typescript
-import { type Decisions, DecisionsClient } from "@humeai/decisions";
-import { type AudioChunk, iterAudioChunks } from "@humeai/decisions/audio-helpers";
+import { type Decisions, DecisionsClient } from "@humeai/audio-decisions";
+import { type AudioChunk, iterAudioChunks } from "@humeai/audio-decisions/audio-helpers";
 
 const client = new DecisionsClient();
 
@@ -369,7 +369,7 @@ The audio helpers import no Node.js modules, so `iterAudioChunks` can also cut a
 Every successful decisions request is recorded as a run, identified by the `runId` of its response. The run endpoints return a run's status, when it started and ended, and the request it evaluated. They do not return answers, so keep the answers you need from the response.
 
 ```typescript
-import { DecisionsClient } from "@humeai/decisions";
+import { DecisionsClient } from "@humeai/audio-decisions";
 
 const client = new DecisionsClient();
 
@@ -389,7 +389,7 @@ console.log(run.status, Object.keys(run.request.questions));
 The client methods reject with a `DecisionsError` when a request fails. `statusCode` holds the HTTP status, and `body` holds the error body, whose `code` says what went wrong and whose `param` points to the field it concerns, when there is one. A `401` body has no `code`; it carries a `message` and, when an API key was rejected, a `requestId`.
 
 ```typescript
-import { DecisionsError } from "@humeai/decisions";
+import { DecisionsError } from "@humeai/audio-decisions";
 
 try {
     await client.decisions.create({ file: { path: "test_call.wav", contentType: "audio/wav" }, request });
@@ -405,7 +405,7 @@ The client retries a request that fails with a 408, 429, or 5xx status up to 2 t
 
 ## Contributing
 
-Most of this SDK is generated by [Fern](https://buildwithfern.com) from the API definition, and edits to generated files are overwritten on the next generation. [CONTRIBUTING.md](https://github.com/HumeAI/hume-decisions-typescript-sdk/blob/main/CONTRIBUTING.md) explains how to build and test the project and how to add code that persists across regenerations. To report a problem, open an issue in this repository.
+Most of this SDK is generated by [Fern](https://buildwithfern.com) from the API definition, and edits to generated files are overwritten on the next generation. [CONTRIBUTING.md](https://github.com/HumeAI/hume-audio-decisions-typescript-sdk/blob/main/CONTRIBUTING.md) explains how to build and test the project and how to add code that persists across regenerations. To report a problem, open an issue in this repository.
 
 ## License
 

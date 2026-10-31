@@ -57,7 +57,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: npm
-      url: https://www.npmjs.com/package/@humeai/decisions
+      url: https://www.npmjs.com/package/@humeai/audio-decisions
     permissions:
       contents: read   # Required for checkout
       id-token: write  # Required for OIDC

@@ -180,7 +180,7 @@ type Cut = [start: number, end: number];
  * chunk is produced from a file that cannot be read to the end.
  *
  * @example
- * import { iterAudioChunks } from "@humeai/decisions/audio-helpers";
+ * import { iterAudioChunks } from "@humeai/audio-decisions/audio-helpers";
  *
  * for await (const chunk of iterAudioChunks({ path: "call.wav" }, { maxChunkMs: 60_000 })) {
  *     console.log(chunk.index, chunk.startMs, chunk.endMs, chunk.data.length);
