@@ -564,6 +564,25 @@ describe("resumeMs", () => {
         expect(result.resumeMs).toBe(0);
     });
 
+    it("finds where to resume in results built without the fields that do not apply to them", () => {
+        const result = new ChunkedDecisionsResult(
+            [
+                {
+                    index: 0,
+                    startMs: 1000,
+                    endMs: 2000,
+                    status: "failed",
+                    error: new DecisionsError({ statusCode: 402 }),
+                },
+                { index: 1, startMs: 2000, endMs: 3000, status: "not_attempted" },
+            ],
+            1000,
+        );
+
+        expect(result.responses).toEqual([undefined, undefined]);
+        expect(result.resumeMs).toBe(1000);
+    });
+
     it("rejects a startMs that is not a safe integer when a result is built", () => {
         expectError(
             thrownBy(() => new ChunkedDecisionsResult([], 1.5)),

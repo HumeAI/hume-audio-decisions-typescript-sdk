@@ -27,12 +27,12 @@ interface SucceededChunk extends ChunkPosition {
     readonly status: "succeeded";
     /** The API's response for the chunk, unchanged. */
     readonly response: DecisionsResponse;
-    readonly error: undefined;
+    readonly error?: undefined;
 }
 
 interface FailedChunk extends ChunkPosition {
     readonly status: "failed";
-    readonly response: undefined;
+    readonly response?: undefined;
     /**
      * The error the request threw. When the response's body could not be read, a DecisionsError with
      * no status code whose `cause` holds the parse error.
@@ -43,8 +43,8 @@ interface FailedChunk extends ChunkPosition {
 interface NotAttemptedChunk extends ChunkPosition {
     /** No request was sent for the chunk, so it was not billed. */
     readonly status: "not_attempted";
-    readonly response: undefined;
-    readonly error: undefined;
+    readonly response?: undefined;
+    readonly error?: undefined;
 }
 
 /** The outcome of one chunk's request. Checking `status` narrows it to the chunk's response or error. */
@@ -126,7 +126,7 @@ async function* send(
     // A chunk's data is copied only when it is sent, so the chunks after a stop cost nothing.
     for (const chunk of chunks) {
         const position = { index: chunk.index, startMs: chunk.startMs, endMs: chunk.endMs };
-        let result: ChunkResult = { ...position, status: "not_attempted", response: undefined, error: undefined };
+        let result: ChunkResult = { ...position, status: "not_attempted" };
         if (!rule.stopped) {
             try {
                 const response = await create({
@@ -135,7 +135,7 @@ async function* send(
                     // The chunks were mixed down when they were planned.
                     downmixStrategy: "none",
                 });
-                result = { ...position, status: "succeeded", response, error: undefined };
+                result = { ...position, status: "succeeded", response };
             } catch (raised) {
                 // An abort ends the job rather than failing one chunk. Anything other than a
                 // DecisionsError did not come from the request, so it is not a chunk's outcome either,
@@ -149,7 +149,7 @@ async function* send(
                     raised instanceof ParseError
                         ? new DecisionsError({ message: "The API's response could not be read.", cause: raised })
                         : raised;
-                result = { ...position, status: "failed", response: undefined, error };
+                result = { ...position, status: "failed", error };
             }
         }
         rule.record(result);
