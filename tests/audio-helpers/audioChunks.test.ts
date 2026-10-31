@@ -335,6 +335,26 @@ describe("iterAudioChunks with WAV files", () => {
         expect(chunk?.data.length).toBeLessThanOrEqual(24_000_000);
     });
 
+    it.each([
+        [44100, 136054],
+        [48000, 124999],
+    ])("limits fixed chunks of 16-bit stereo at %i Hz to the %i ms the docs give", async (sampleRate, longest) => {
+        // The maxChunkMs doc and the README quote these limits, so a change to the size limit must update them.
+        const recording = rawWav({
+            tag: 0x0001,
+            sampleRate,
+            channels: 2,
+            bits: 16,
+            data: new Uint8Array(140 * sampleRate * 4),
+        });
+
+        const error = await iterationError(
+            iterAudioChunks(recording, { maxChunkMs: 300_000, split: "fixed", downmixStrategy: "none" }),
+        );
+
+        expectError(error, RangeError, `maxChunkMs must be at most ${longest} for this WAV file`);
+    });
+
     it("cuts even chunks too large for the API into the fewest that fit", async () => {
         // 32-bit float stereo at 48 kHz is 384,000 bytes a second, so 130 seconds is 49,920,000 bytes,
         // which takes 3 chunks of at most 24,000,000 bytes.
