@@ -3,10 +3,11 @@
 import type * as Decisions from "../index.js";
 
 /**
- * The answer to each question, keyed by question ID, and the `run_id` of the model run that produced the answers.
+ * The answer to each question, keyed by question ID, the `run_id` of the model run that produced the answers, and what the request is billed.
  */
 export interface DecisionsResponse {
     /** Identifies this request's run. Pass it to the run endpoints to look the run up. A run can take a moment to appear, and under heavy load may not be recorded. */
     runId: string;
     answers: Decisions.Answers;
+    received: Decisions.Received;
 }

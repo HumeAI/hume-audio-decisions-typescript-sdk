@@ -18,6 +18,7 @@ describe("RunsClient", () => {
                     started_at: "2026-10-26T17:09:02.114Z",
                     ended_at: "2026-10-26T17:09:04.538Z",
                     bytes_received: 2884144,
+                    received: { input_tokens: 1436 },
                 },
                 {
                     run_id: "019a1f50-a6e2-7b13-8c5f-3d9e1a7b4c20",
@@ -34,6 +35,7 @@ describe("RunsClient", () => {
                     started_at: "2026-10-26T17:04:11.380Z",
                     ended_at: "2026-10-26T17:04:13.912Z",
                     bytes_received: 4555564,
+                    received: { input_tokens: 2150 },
                 },
             ],
             next_cursor: "eyJiZWZvcmUiOiIwMTlhMWYzYyJ9",
@@ -51,6 +53,9 @@ describe("RunsClient", () => {
                     startedAt: new Date("2026-10-26T17:09:02.114Z"),
                     endedAt: new Date("2026-10-26T17:09:04.538Z"),
                     bytesReceived: 2884144,
+                    received: {
+                        inputTokens: 1436,
+                    },
                 },
                 {
                     runId: "019a1f50-a6e2-7b13-8c5f-3d9e1a7b4c20",
@@ -67,6 +72,9 @@ describe("RunsClient", () => {
                     startedAt: new Date("2026-10-26T17:04:11.380Z"),
                     endedAt: new Date("2026-10-26T17:04:13.912Z"),
                     bytesReceived: 4555564,
+                    received: {
+                        inputTokens: 2150,
+                    },
                 },
             ],
             nextCursor: "eyJiZWZvcmUiOiIwMTlhMWYzYyJ9",
@@ -182,6 +190,7 @@ describe("RunsClient", () => {
             started_at: "2026-10-26T17:04:11.380Z",
             ended_at: "2026-10-26T17:04:13.912Z",
             bytes_received: 4555564,
+            received: { input_tokens: 2150 },
             request: {
                 context:
                     "A simulated test call in which a voice AI agent helps a caller reschedule an appointment. Both voices are synthetic, and the agent speaks first.",
@@ -227,6 +236,9 @@ describe("RunsClient", () => {
             startedAt: new Date("2026-10-26T17:04:11.380Z"),
             endedAt: new Date("2026-10-26T17:04:13.912Z"),
             bytesReceived: 4555564,
+            received: {
+                inputTokens: 2150,
+            },
             request: {
                 context:
                     "A simulated test call in which a voice AI agent helps a caller reschedule an appointment. Both voices are synthetic, and the agent speaks first.",

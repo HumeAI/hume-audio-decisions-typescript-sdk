@@ -4,6 +4,7 @@ import type * as Decisions from "../../api/index.js";
 import * as core from "../../core/index.js";
 import type * as serializers from "../index.js";
 import { Answers } from "./Answers.js";
+import { Received } from "./Received.js";
 
 export const DecisionsResponse: core.serialization.ObjectSchema<
     serializers.DecisionsResponse.Raw,
@@ -11,11 +12,13 @@ export const DecisionsResponse: core.serialization.ObjectSchema<
 > = core.serialization.object({
     runId: core.serialization.property("run_id", core.serialization.string()),
     answers: Answers,
+    received: Received,
 });
 
 export declare namespace DecisionsResponse {
     export interface Raw {
         run_id: string;
         answers: Answers.Raw;
+        received: Received.Raw;
     }
 }

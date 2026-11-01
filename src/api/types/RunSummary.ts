@@ -17,4 +17,6 @@ export interface RunSummary {
     endedAt: Date;
     /** The size of the `file` part, in bytes. */
     bytesReceived: number;
+    /** What the run was billed: the decisions response's `received`. Absent for a run that was not billed. */
+    received?: Decisions.Received;
 }
