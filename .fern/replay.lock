@@ -66,14 +66,20 @@ generations:
     cli_version: unknown
     generator_versions:
       fernapi/fern-typescript-sdk: 3.108.0
-current_generation: 02472059d96f6e8eaf3be544bd883141db53abc8
+  - commit_sha: 21e7531bd373888469655972aa3dd4cc550422f6
+    tree_hash: ffded8f9a66ac03b21c3bdaea47fc7a53902529f
+    timestamp: 2026-11-01T05:50:53.383Z
+    cli_version: unknown
+    generator_versions:
+      fernapi/fern-typescript-sdk: 3.108.0
+current_generation: 21e7531bd373888469655972aa3dd4cc550422f6
 patches:
   - id: patch-9b37cd53
     content_hash: sha256:eebda985f4ac58de869fdf166187244293e8ef2eb653d9a545e9de2461a8860c
     original_commit: 9b37cd531065801be38abacda2412f6236d9e1bc
     original_message: Publish only from version tags that match the package version, using trusted publishing through a registry environment
     original_author: zach <zachary.greathouse@hume.ai>
-    base_generation: 02472059d96f6e8eaf3be544bd883141db53abc8
+    base_generation: 21e7531bd373888469655972aa3dd4cc550422f6
     files:
       - .github/workflows/ci.yml
     patch_content: |+
@@ -1289,3 +1295,4 @@ patches:
                 return collectResults(this.iterCreateChunked(request, requestOptions), request.startMs);
             }
         }
+    status: unresolved
