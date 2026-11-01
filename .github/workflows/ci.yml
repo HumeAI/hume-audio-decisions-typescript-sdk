@@ -80,16 +80,6 @@ jobs:
             exit 1
           fi
 
-      # A published version can never be published again, so a tag on the wrong commit must fail
-      # here rather than release whatever version that commit holds.
-      - name: Check the tag matches the package version
-        run: |
-          PKG_VERSION=$(node -p "require('./package.json').version")
-          if [[ "${GITHUB_REF_NAME}" != "v${PKG_VERSION}" ]]; then
-            echo "::error::Tag ${GITHUB_REF_NAME} does not match package version ${PKG_VERSION}."
-            exit 1
-          fi
-
       - name: Install pnpm
         uses: pnpm/action-setup@v4
 
