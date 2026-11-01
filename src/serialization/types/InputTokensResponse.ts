@@ -8,11 +8,11 @@ export const InputTokensResponse: core.serialization.ObjectSchema<
     serializers.InputTokensResponse.Raw,
     Decisions.InputTokensResponse
 > = core.serialization.object({
-    inputTokens: core.serialization.property("input_tokens", core.serialization.number()),
+    estimatedInputTokens: core.serialization.property("estimated_input_tokens", core.serialization.number()),
 });
 
 export declare namespace InputTokensResponse {
     export interface Raw {
-        input_tokens: number;
+        estimated_input_tokens: number;
     }
 }

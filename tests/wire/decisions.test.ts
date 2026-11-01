@@ -31,7 +31,7 @@ describe("DecisionsClient", () => {
                 agent_glitches: { type: "moment", instructions: "Where does the agent glitch, slur or sound robotic?" },
             },
         };
-        const rawResponseBody = { input_tokens: 2150 };
+        const rawResponseBody = { estimated_input_tokens: 2150 };
 
         server
             .mockEndpoint()
@@ -81,7 +81,7 @@ describe("DecisionsClient", () => {
             },
         });
         expect(response).toEqual({
-            inputTokens: 2150,
+            estimatedInputTokens: 2150,
         });
     });
 
@@ -207,6 +207,42 @@ describe("DecisionsClient", () => {
             .post("/v0/decisions/file/input_tokens")
             .jsonBody(rawRequestBody)
             .respondWith()
+            .statusCode(413)
+            .jsonBody(rawResponseBody)
+            .build();
+
+        await expect(async () => {
+            return await client.decisions.inputTokens({
+                audioDurationMs: 300000,
+                questions: {
+                    questions: {
+                        type: "noul",
+                        instructions: "x",
+                    },
+                },
+            });
+        }).rejects.toThrow(Decisions.ContentTooLargeError);
+    });
+
+    test("inputTokens (6)", async () => {
+        const server = mockServerPool.createServer();
+        const client = new DecisionsClient({ maxRetries: 0, apiKey: "test", environment: server.baseUrl });
+        const rawRequestBody = {
+            audio_duration_ms: 300000,
+            questions: { questions: { type: "noul", instructions: "x" } },
+        };
+        const rawResponseBody = {
+            type: "error",
+            code: "message_invalid",
+            message: "message",
+            request_id: "request_id",
+        };
+
+        server
+            .mockEndpoint()
+            .post("/v0/decisions/file/input_tokens")
+            .jsonBody(rawRequestBody)
+            .respondWith()
             .statusCode(415)
             .jsonBody(rawResponseBody)
             .build();
@@ -224,7 +260,7 @@ describe("DecisionsClient", () => {
         }).rejects.toThrow(Decisions.UnsupportedMediaTypeError);
     });
 
-    test("inputTokens (6)", async () => {
+    test("inputTokens (7)", async () => {
         const server = mockServerPool.createServer();
         const client = new DecisionsClient({ maxRetries: 0, apiKey: "test", environment: server.baseUrl });
         const rawRequestBody = {
@@ -255,7 +291,7 @@ describe("DecisionsClient", () => {
         }).rejects.toThrow(Decisions.TooManyRequestsError);
     });
 
-    test("inputTokens (7)", async () => {
+    test("inputTokens (8)", async () => {
         const server = mockServerPool.createServer();
         const client = new DecisionsClient({ maxRetries: 0, apiKey: "test", environment: server.baseUrl });
         const rawRequestBody = {

@@ -9,6 +9,7 @@
  * - `question_invalid`: a question is invalid, including when it does not match the schema, for example because it has duplicate option names or fewer than two options.
  * - `audio_decode_failed`: the audio file could not be decoded.
  * - `audio_format_unsupported`: the audio file is not MP3 or WAV.
+ * - `audio_too_short`: the audio is shorter than 5 seconds, or `audio_duration_ms` is under 5000.
  * - `audio_too_long`: the audio is longer than 5 minutes, or `audio_duration_ms` is over 300000.
  * - `invalid_request`: a query parameter has a value the endpoint does not accept, or `cursor` is not one the endpoint issued. List runs only.
  *
@@ -26,7 +27,7 @@
  *
  * **`413 Content Too Large`**
  *
- * - `payload_too_large`: the request body, `request` and `file` parts together, is larger than 25,000,000 bytes.
+ * - `payload_too_large`: the request body is larger than 25,000,000 bytes: for a decisions request, its `request` and `file` parts together.
  *
  * **`415 Unsupported Media Type`**
  *
@@ -45,6 +46,7 @@ export const ErrorCode = {
     QuestionInvalid: "question_invalid",
     AudioDecodeFailed: "audio_decode_failed",
     AudioFormatUnsupported: "audio_format_unsupported",
+    AudioTooShort: "audio_too_short",
     AudioTooLong: "audio_too_long",
     InvalidRequest: "invalid_request",
     PaymentRequired: "payment_required",

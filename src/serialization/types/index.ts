@@ -18,6 +18,7 @@ export * from "./NoulCriteria.js";
 export * from "./NoulQuestion.js";
 export * from "./Question.js";
 export * from "./Questions.js";
+export * from "./Received.js";
 export * from "./Run.js";
 export * from "./RunStatus.js";
 export * from "./RunSummary.js";
