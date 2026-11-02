@@ -15,10 +15,7 @@ export interface Run {
     startedAt: Date;
     /** When the run ended. */
     endedAt: Date;
-    /** The size of the `file` part, in bytes. */
-    bytesReceived: number;
-    /** What the run was billed: the decisions response's `received`. Absent for a run that was not billed. */
-    received?: Decisions.Received;
+    received: Decisions.RunReceived;
     /** The `request` part the run evaluated: its `context` and `questions`, as sent. */
     request: Decisions.DecisionsRequest;
 }
