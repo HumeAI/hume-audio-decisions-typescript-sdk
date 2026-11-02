@@ -78,19 +78,25 @@ generations:
     cli_version: unknown
     generator_versions:
       fernapi/fern-typescript-sdk: 3.108.0
-current_generation: c5b23d2285a7526922506d3b62954dac17d8c96d
+  - commit_sha: 7ad335fd056aabaacd5d98ed7a67956eebe82f90
+    tree_hash: 87a1d39ea18ef8cc241f7987148b6010c76f59fb
+    timestamp: 2026-11-02T00:10:27.967Z
+    cli_version: unknown
+    generator_versions:
+      fernapi/fern-typescript-sdk: 3.108.0
+current_generation: 7ad335fd056aabaacd5d98ed7a67956eebe82f90
 patches:
   - id: patch-9b37cd53
-    content_hash: sha256:46fcaa0f855bc077e41ecc960f4c0050ea5fa3168c6a79c67fd111ae2d5d2649
+    content_hash: sha256:533314c39b2aded39fa4305e3e7f210f2ed96642a8ff5f1f134a5579882161cb
     original_commit: 9b37cd531065801be38abacda2412f6236d9e1bc
     original_message: Publish only from version tags that match the package version, using trusted publishing through a registry environment
     original_author: zach <zachary.greathouse@hume.ai>
-    base_generation: c5b23d2285a7526922506d3b62954dac17d8c96d
+    base_generation: 7ad335fd056aabaacd5d98ed7a67956eebe82f90
     files:
       - .github/workflows/ci.yml
     patch_content: |+
       diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
-      index 935ef8c..58f560a 100644
+      index 935ef8c..6f89639 100644
       --- a/.github/workflows/ci.yml
       +++ b/.github/workflows/ci.yml
       @@ -42,13 +42,22 @@ jobs:
@@ -117,20 +123,10 @@ patches:
            permissions:
              contents: read   # Required for checkout
              id-token: write  # Required for OIDC
-      @@ -61,6 +70,26 @@ jobs:
+      @@ -61,6 +70,16 @@ jobs:
                with:
                  node-version: "lts/Krypton"
        
-      +      # A published version can never be published again, so a tag on the wrong commit must fail
-      +      # here rather than release whatever version that commit holds.
-      +      - name: Check the tag matches the package version
-      +        run: |
-      +          PKG_VERSION=$(node -p "require('./package.json').version")
-      +          if [[ "${GITHUB_REF_NAME}" != "v${PKG_VERSION}" ]]; then
-      +            echo "::error::Tag ${GITHUB_REF_NAME} does not match package version ${PKG_VERSION}."
-      +            exit 1
-      +          fi
-      +
       +      # A published version can never be published again, so a tag on the wrong commit must fail
       +      # here rather than release whatever version that commit holds.
       +      - name: Check the tag matches the package version
@@ -228,16 +224,6 @@ patches:
                     exit 1
                   fi
 
-              # A published version can never be published again, so a tag on the wrong commit must fail
-              # here rather than release whatever version that commit holds.
-              - name: Check the tag matches the package version
-                run: |
-                  PKG_VERSION=$(node -p "require('./package.json').version")
-                  if [[ "${GITHUB_REF_NAME}" != "v${PKG_VERSION}" ]]; then
-                    echo "::error::Tag ${GITHUB_REF_NAME} does not match package version ${PKG_VERSION}."
-                    exit 1
-                  fi
-
               - name: Install pnpm
                 uses: pnpm/action-setup@v4
 
@@ -266,18 +252,18 @@ patches:
                   fi
     user_owned: true
   - id: patch-8e21e490
-    content_hash: sha256:da234c364fd5591c48cd30d631355fc79244d63fe975b4aaf65df9c81dda668d
+    content_hash: sha256:b4c23333c12e7bde4af3f3e3612a96fd2cb51d32c69d0891abab4deee5836894
     original_commit: 8e21e49062335fd40aaf510acd740283756e42d5
     original_message: Add helpers that send long recordings in chunks and mix WAV down to 16 kHz mono (#14)
     original_author: Zachary Greathouse <26175515+zgreathouse@users.noreply.github.com>
-    base_generation: c5b23d2285a7526922506d3b62954dac17d8c96d
+    base_generation: 7ad335fd056aabaacd5d98ed7a67956eebe82f90
     files:
       - .github/workflows/ci.yml
       - package.json
       - src/api/resources/decisions/client/Client.ts
     patch_content: |
       diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
-      index 935ef8c..58f560a 100644
+      index 935ef8c..6f89639 100644
       --- a/.github/workflows/ci.yml
       +++ b/.github/workflows/ci.yml
       @@ -42,13 +42,22 @@ jobs:
@@ -304,20 +290,10 @@ patches:
            permissions:
              contents: read   # Required for checkout
              id-token: write  # Required for OIDC
-      @@ -61,6 +70,26 @@ jobs:
+      @@ -61,6 +70,16 @@ jobs:
                with:
                  node-version: "lts/Krypton"
        
-      +      # A published version can never be published again, so a tag on the wrong commit must fail
-      +      # here rather than release whatever version that commit holds.
-      +      - name: Check the tag matches the package version
-      +        run: |
-      +          PKG_VERSION=$(node -p "require('./package.json').version")
-      +          if [[ "${GITHUB_REF_NAME}" != "v${PKG_VERSION}" ]]; then
-      +            echo "::error::Tag ${GITHUB_REF_NAME} does not match package version ${PKG_VERSION}."
-      +            exit 1
-      +          fi
-      +
       +      # A published version can never be published again, so a tag on the wrong commit must fail
       +      # here rather than release whatever version that commit holds.
       +      - name: Check the tag matches the package version
@@ -551,16 +527,6 @@ patches:
                 uses: actions/setup-node@v6
                 with:
                   node-version: "lts/Krypton"
-
-              # A published version can never be published again, so a tag on the wrong commit must fail
-              # here rather than release whatever version that commit holds.
-              - name: Check the tag matches the package version
-                run: |
-                  PKG_VERSION=$(node -p "require('./package.json').version")
-                  if [[ "${GITHUB_REF_NAME}" != "v${PKG_VERSION}" ]]; then
-                    echo "::error::Tag ${GITHUB_REF_NAME} does not match package version ${PKG_VERSION}."
-                    exit 1
-                  fi
 
               # A published version can never be published again, so a tag on the wrong commit must fail
               # here rather than release whatever version that commit holds.
@@ -1355,17 +1321,17 @@ patches:
         }
     user_owned: true
   - id: patch-17cf83b6
-    content_hash: sha256:393602028c51e6ec3bf056b88e32dcd40ae3bc03f3345799ceb6c86f8d4c563b
+    content_hash: sha256:fad65c05de525afafc9c7132dc005a33e00e542ecdd70cf05e2417ca5bee7fca
     original_commit: 17cf83b65295cf8cce80a7a615a917d9775711da
     original_message: Point the npm environment and the chunked method's audio-helpers reference at @humeai/audio-decisions again
     original_author: zach <zachary.greathouse@hume.ai>
-    base_generation: c5b23d2285a7526922506d3b62954dac17d8c96d
+    base_generation: 7ad335fd056aabaacd5d98ed7a67956eebe82f90
     files:
       - .github/workflows/ci.yml
       - src/api/resources/decisions/client/Client.ts
     patch_content: |
       diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
-      index 935ef8c..58f560a 100644
+      index 935ef8c..6f89639 100644
       --- a/.github/workflows/ci.yml
       +++ b/.github/workflows/ci.yml
       @@ -42,13 +42,22 @@ jobs:
@@ -1392,20 +1358,10 @@ patches:
            permissions:
              contents: read   # Required for checkout
              id-token: write  # Required for OIDC
-      @@ -61,6 +70,26 @@ jobs:
+      @@ -61,6 +70,16 @@ jobs:
                with:
                  node-version: "lts/Krypton"
        
-      +      # A published version can never be published again, so a tag on the wrong commit must fail
-      +      # here rather than release whatever version that commit holds.
-      +      - name: Check the tag matches the package version
-      +        run: |
-      +          PKG_VERSION=$(node -p "require('./package.json').version")
-      +          if [[ "${GITHUB_REF_NAME}" != "v${PKG_VERSION}" ]]; then
-      +            echo "::error::Tag ${GITHUB_REF_NAME} does not match package version ${PKG_VERSION}."
-      +            exit 1
-      +          fi
-      +
       +      # A published version can never be published again, so a tag on the wrong commit must fail
       +      # here rather than release whatever version that commit holds.
       +      - name: Check the tag matches the package version
@@ -1617,16 +1573,6 @@ patches:
                 uses: actions/setup-node@v6
                 with:
                   node-version: "lts/Krypton"
-
-              # A published version can never be published again, so a tag on the wrong commit must fail
-              # here rather than release whatever version that commit holds.
-              - name: Check the tag matches the package version
-                run: |
-                  PKG_VERSION=$(node -p "require('./package.json').version")
-                  if [[ "${GITHUB_REF_NAME}" != "v${PKG_VERSION}" ]]; then
-                    echo "::error::Tag ${GITHUB_REF_NAME} does not match package version ${PKG_VERSION}."
-                    exit 1
-                  fi
 
               # A published version can never be published again, so a tag on the wrong commit must fail
               # here rather than release whatever version that commit holds.
@@ -2302,3 +2248,168 @@ patches:
                 return collectResults(this.iterCreateChunked(request, requestOptions), request.startMs);
             }
         }
+    user_owned: true
+  - id: patch-d4ddf2b6
+    content_hash: sha256:533314c39b2aded39fa4305e3e7f210f2ed96642a8ff5f1f134a5579882161cb
+    original_commit: d4ddf2b6535871afcaa5ccb54411b3b3cefb8616
+    original_message: Remove the tag check step that Replay applied twice, and move the docs links to /audio-decisions
+    original_author: zach <zachary.greathouse@hume.ai>
+    base_generation: 7ad335fd056aabaacd5d98ed7a67956eebe82f90
+    files:
+      - .github/workflows/ci.yml
+    patch_content: |+
+      diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+      index 935ef8c..6f89639 100644
+      --- a/.github/workflows/ci.yml
+      +++ b/.github/workflows/ci.yml
+      @@ -42,13 +42,22 @@ jobs:
+             - name: Install dependencies
+               run: pnpm install --frozen-lockfile
+       
+      +      # The downmix tests compare the SDK's mixdown with ffmpeg's, which the API uses, and fail in CI without it.
+      +      - name: Install ffmpeg
+      +        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      +
+             - name: Test
+               run: pnpm test
+       
+         publish:
+           needs: [ compile, test ]
+      -    if: github.event_name == 'push' && contains(github.ref, 'refs/tags/')
+      +    # Only version tags publish. Fern pushes a tag of its own to this repository, and that tag must
+      +    # not release the package.
+      +    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+           runs-on: ubuntu-latest
+      +    environment:
+      +      name: npm
+      +      url: https://www.npmjs.com/package/@humeai/audio-decisions
+           permissions:
+             contents: read   # Required for checkout
+             id-token: write  # Required for OIDC
+      @@ -61,6 +70,16 @@ jobs:
+               with:
+                 node-version: "lts/Krypton"
+       
+      +      # A published version can never be published again, so a tag on the wrong commit must fail
+      +      # here rather than release whatever version that commit holds.
+      +      - name: Check the tag matches the package version
+      +        run: |
+      +          PKG_VERSION=$(node -p "require('./package.json').version")
+      +          if [[ "${GITHUB_REF_NAME}" != "v${PKG_VERSION}" ]]; then
+      +            echo "::error::Tag ${GITHUB_REF_NAME} does not match package version ${PKG_VERSION}."
+      +            exit 1
+      +          fi
+      +
+             - name: Install pnpm
+               uses: pnpm/action-setup@v4
+       
+    theirs_snapshot:
+      .github/workflows/ci.yml: |-
+        name: ci
+
+        on: [push]
+
+        concurrency:
+          group: ${{ github.workflow }}-${{ github.ref }}
+          cancel-in-progress: false
+
+        jobs:
+          compile:
+            runs-on: ubuntu-latest
+
+            steps:
+              - name: Checkout repo
+                uses: actions/checkout@v6
+
+              - name: Set up node
+                uses: actions/setup-node@v6
+
+              - name: Install pnpm
+                uses: pnpm/action-setup@v4
+
+              - name: Install dependencies
+                run: pnpm install --frozen-lockfile
+
+              - name: Compile
+                run: pnpm build
+
+          test:
+            runs-on: ubuntu-latest
+
+            steps:
+              - name: Checkout repo
+                uses: actions/checkout@v6
+
+              - name: Set up node
+                uses: actions/setup-node@v6
+                        
+              - name: Install pnpm
+                uses: pnpm/action-setup@v4
+
+              - name: Install dependencies
+                run: pnpm install --frozen-lockfile
+
+              # The downmix tests compare the SDK's mixdown with ffmpeg's, which the API uses, and fail in CI without it.
+              - name: Install ffmpeg
+                run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+              - name: Test
+                run: pnpm test
+
+          publish:
+            needs: [ compile, test ]
+            # Only version tags publish. Fern pushes a tag of its own to this repository, and that tag must
+            # not release the package.
+            if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+            runs-on: ubuntu-latest
+            environment:
+              name: npm
+              url: https://www.npmjs.com/package/@humeai/audio-decisions
+            permissions:
+              contents: read   # Required for checkout
+              id-token: write  # Required for OIDC
+            steps:
+              - name: Checkout repo
+                uses: actions/checkout@v6
+
+              - name: Set up node
+                uses: actions/setup-node@v6
+                with:
+                  node-version: "lts/Krypton"
+
+              # A published version can never be published again, so a tag on the wrong commit must fail
+              # here rather than release whatever version that commit holds.
+              - name: Check the tag matches the package version
+                run: |
+                  PKG_VERSION=$(node -p "require('./package.json').version")
+                  if [[ "${GITHUB_REF_NAME}" != "v${PKG_VERSION}" ]]; then
+                    echo "::error::Tag ${GITHUB_REF_NAME} does not match package version ${PKG_VERSION}."
+                    exit 1
+                  fi
+
+              - name: Install pnpm
+                uses: pnpm/action-setup@v4
+
+              - name: Install dependencies
+                run: pnpm install --frozen-lockfile
+
+              - name: Build
+                run: pnpm build
+
+              - name: Publish to npm
+                run: |
+                  if [[ ${GITHUB_REF} == *alpha* ]]; then
+                    npm publish --access public --tag alpha
+                  elif [[ ${GITHUB_REF} == *beta* ]]; then
+                    npm publish --access public --tag beta
+                  else
+                    PKG_NAME=$(node -p "require('./package.json').name")
+                    PKG_VERSION=$(node -p "require('./package.json').version")
+                    CURRENT_LATEST=$(npm view "${PKG_NAME}" dist-tags.latest 2>/dev/null || echo "0.0.0")
+                    if npx -y semver@7.8.1 "${PKG_VERSION}" -r "<${CURRENT_LATEST}" > /dev/null 2>&1; then
+                      echo "Publishing ${PKG_VERSION} with --tag backport (current latest is ${CURRENT_LATEST})"
+                      npm publish --access public --tag backport
+                    else
+                      npm publish --access public
+                    fi
+                  fi
