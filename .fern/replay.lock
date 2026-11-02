@@ -96,14 +96,20 @@ generations:
     cli_version: unknown
     generator_versions:
       fernapi/fern-typescript-sdk: 3.108.0
-current_generation: 2fb0e8231e110e830a5835084e2d21c737845996
+  - commit_sha: ef20710fd655e691baa24324bf7a029ae08e635e
+    tree_hash: eaedfb82ce5832024c506653efc505cc7e062154
+    timestamp: 2026-11-02T15:14:19.833Z
+    cli_version: unknown
+    generator_versions:
+      fernapi/fern-typescript-sdk: 3.108.0
+current_generation: ef20710fd655e691baa24324bf7a029ae08e635e
 patches:
   - id: patch-9b37cd53
     content_hash: sha256:533314c39b2aded39fa4305e3e7f210f2ed96642a8ff5f1f134a5579882161cb
     original_commit: 9b37cd531065801be38abacda2412f6236d9e1bc
     original_message: Publish only from version tags that match the package version, using trusted publishing through a registry environment
     original_author: zach <zachary.greathouse@hume.ai>
-    base_generation: 2fb0e8231e110e830a5835084e2d21c737845996
+    base_generation: ef20710fd655e691baa24324bf7a029ae08e635e
     files:
       - .github/workflows/ci.yml
     patch_content: |+
@@ -268,7 +274,7 @@ patches:
     original_commit: 8e21e49062335fd40aaf510acd740283756e42d5
     original_message: Add helpers that send long recordings in chunks and mix WAV down to 16 kHz mono (#14)
     original_author: Zachary Greathouse <26175515+zgreathouse@users.noreply.github.com>
-    base_generation: 2fb0e8231e110e830a5835084e2d21c737845996
+    base_generation: ef20710fd655e691baa24324bf7a029ae08e635e
     files:
       - .github/workflows/ci.yml
       - package.json
@@ -320,7 +326,7 @@ patches:
                uses: pnpm/action-setup@v4
        
       diff --git a/package.json b/package.json
-      index c41f551..d866599 100644
+      index 4df4c3c..1387398 100644
       --- a/package.json
       +++ b/package.json
       @@ -56,6 +56,17 @@
@@ -579,7 +585,7 @@ patches:
       package.json: |
         {
             "name": "@humeai/audio-decisions",
-            "version": "0.1.0",
+            "version": "0.1.1",
             "private": false,
             "repository": {
                 "type": "git",
@@ -1337,7 +1343,7 @@ patches:
     original_commit: 17cf83b65295cf8cce80a7a615a917d9775711da
     original_message: Point the npm environment and the chunked method's audio-helpers reference at @humeai/audio-decisions again
     original_author: zach <zachary.greathouse@hume.ai>
-    base_generation: 2fb0e8231e110e830a5835084e2d21c737845996
+    base_generation: ef20710fd655e691baa24324bf7a029ae08e635e
     files:
       - .github/workflows/ci.yml
       - src/api/resources/decisions/client/Client.ts
@@ -2266,7 +2272,7 @@ patches:
     original_commit: d4ddf2b6535871afcaa5ccb54411b3b3cefb8616
     original_message: Remove the tag check step that Replay applied twice, and move the docs links to /audio-decisions
     original_author: zach <zachary.greathouse@hume.ai>
-    base_generation: 2fb0e8231e110e830a5835084e2d21c737845996
+    base_generation: ef20710fd655e691baa24324bf7a029ae08e635e
     files:
       - .github/workflows/ci.yml
     patch_content: |+
