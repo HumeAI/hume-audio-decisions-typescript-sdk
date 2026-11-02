@@ -17,8 +17,7 @@ describe("RunsClient", () => {
                     status: "ended",
                     started_at: "2026-10-26T17:09:02.114Z",
                     ended_at: "2026-10-26T17:09:04.538Z",
-                    bytes_received: 2884144,
-                    received: { input_tokens: 1436 },
+                    received: { file_bytes: 2884144, input_tokens: 1436 },
                 },
                 {
                     run_id: "019a1f50-a6e2-7b13-8c5f-3d9e1a7b4c20",
@@ -26,7 +25,7 @@ describe("RunsClient", () => {
                     status: "errored",
                     started_at: "2026-10-26T17:06:40.207Z",
                     ended_at: "2026-10-26T17:06:40.981Z",
-                    bytes_received: 164524,
+                    received: { file_bytes: 164524 },
                 },
                 {
                     run_id: "019a1f3c-7d2e-7b41-9c58-2e6f4a1d8b03",
@@ -34,8 +33,7 @@ describe("RunsClient", () => {
                     status: "ended",
                     started_at: "2026-10-26T17:04:11.380Z",
                     ended_at: "2026-10-26T17:04:13.912Z",
-                    bytes_received: 4555564,
-                    received: { input_tokens: 2150 },
+                    received: { file_bytes: 4555564, input_tokens: 2150 },
                 },
             ],
             next_cursor: "eyJiZWZvcmUiOiIwMTlhMWYzYyJ9",
@@ -52,8 +50,8 @@ describe("RunsClient", () => {
                     status: "ended",
                     startedAt: new Date("2026-10-26T17:09:02.114Z"),
                     endedAt: new Date("2026-10-26T17:09:04.538Z"),
-                    bytesReceived: 2884144,
                     received: {
+                        fileBytes: 2884144,
                         inputTokens: 1436,
                     },
                 },
@@ -63,7 +61,9 @@ describe("RunsClient", () => {
                     status: "errored",
                     startedAt: new Date("2026-10-26T17:06:40.207Z"),
                     endedAt: new Date("2026-10-26T17:06:40.981Z"),
-                    bytesReceived: 164524,
+                    received: {
+                        fileBytes: 164524,
+                    },
                 },
                 {
                     runId: "019a1f3c-7d2e-7b41-9c58-2e6f4a1d8b03",
@@ -71,8 +71,8 @@ describe("RunsClient", () => {
                     status: "ended",
                     startedAt: new Date("2026-10-26T17:04:11.380Z"),
                     endedAt: new Date("2026-10-26T17:04:13.912Z"),
-                    bytesReceived: 4555564,
                     received: {
+                        fileBytes: 4555564,
                         inputTokens: 2150,
                     },
                 },
@@ -189,8 +189,7 @@ describe("RunsClient", () => {
             status: "ended",
             started_at: "2026-10-26T17:04:11.380Z",
             ended_at: "2026-10-26T17:04:13.912Z",
-            bytes_received: 4555564,
-            received: { input_tokens: 2150 },
+            received: { file_bytes: 4555564, input_tokens: 2150 },
             request: {
                 context:
                     "A simulated test call in which a voice AI agent helps a caller reschedule an appointment. Both voices are synthetic, and the agent speaks first.",
@@ -235,8 +234,8 @@ describe("RunsClient", () => {
             status: "ended",
             startedAt: new Date("2026-10-26T17:04:11.380Z"),
             endedAt: new Date("2026-10-26T17:04:13.912Z"),
-            bytesReceived: 4555564,
             received: {
+                fileBytes: 4555564,
                 inputTokens: 2150,
             },
             request: {

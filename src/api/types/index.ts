@@ -20,6 +20,7 @@ export * from "./Question.js";
 export * from "./Questions.js";
 export * from "./Received.js";
 export * from "./Run.js";
+export * from "./RunReceived.js";
 export * from "./RunStatus.js";
 export * from "./RunSummary.js";
 export * from "./RunsPage.js";

@@ -3,7 +3,7 @@
 import type * as Decisions from "../../api/index.js";
 import * as core from "../../core/index.js";
 import type * as serializers from "../index.js";
-import { Received } from "./Received.js";
+import { RunReceived } from "./RunReceived.js";
 import { RunStatus } from "./RunStatus.js";
 
 export const RunSummary: core.serialization.ObjectSchema<serializers.RunSummary.Raw, Decisions.RunSummary> =
@@ -13,8 +13,7 @@ export const RunSummary: core.serialization.ObjectSchema<serializers.RunSummary.
         status: RunStatus,
         startedAt: core.serialization.property("started_at", core.serialization.date()),
         endedAt: core.serialization.property("ended_at", core.serialization.date()),
-        bytesReceived: core.serialization.property("bytes_received", core.serialization.number()),
-        received: Received.optional(),
+        received: RunReceived,
     });
 
 export declare namespace RunSummary {
@@ -24,7 +23,6 @@ export declare namespace RunSummary {
         status: RunStatus.Raw;
         started_at: string;
         ended_at: string;
-        bytes_received: number;
-        received?: Received.Raw | null;
+        received: RunReceived.Raw;
     }
 }
