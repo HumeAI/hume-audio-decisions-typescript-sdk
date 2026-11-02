@@ -31,7 +31,7 @@ describe("DecisionsClient", () => {
                 agent_glitches: { type: "moment", instructions: "Where does the agent glitch, slur or sound robotic?" },
             },
         };
-        const rawResponseBody = { estimated_input_tokens: 2150 };
+        const rawResponseBody = { estimated_input_tokens: 11683 };
 
         server
             .mockEndpoint()
@@ -81,7 +81,7 @@ describe("DecisionsClient", () => {
             },
         });
         expect(response).toEqual({
-            estimatedInputTokens: 2150,
+            estimatedInputTokens: 11683,
         });
     });
 

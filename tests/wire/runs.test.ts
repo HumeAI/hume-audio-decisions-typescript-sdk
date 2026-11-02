@@ -17,7 +17,7 @@ describe("RunsClient", () => {
                     status: "ended",
                     started_at: "2026-10-26T17:09:02.114Z",
                     ended_at: "2026-10-26T17:09:04.538Z",
-                    received: { file_bytes: 2884144, input_tokens: 1436 },
+                    received: { file_bytes: 2880044, input_tokens: 7830 },
                 },
                 {
                     run_id: "019a1f50-a6e2-7b13-8c5f-3d9e1a7b4c20",
@@ -33,7 +33,7 @@ describe("RunsClient", () => {
                     status: "ended",
                     started_at: "2026-10-26T17:04:11.380Z",
                     ended_at: "2026-10-26T17:04:13.912Z",
-                    received: { file_bytes: 4555564, input_tokens: 2150 },
+                    received: { file_bytes: 4320044, input_tokens: 11683 },
                 },
             ],
             next_cursor: "eyJiZWZvcmUiOiIwMTlhMWYzYyJ9",
@@ -51,8 +51,8 @@ describe("RunsClient", () => {
                     startedAt: new Date("2026-10-26T17:09:02.114Z"),
                     endedAt: new Date("2026-10-26T17:09:04.538Z"),
                     received: {
-                        fileBytes: 2884144,
-                        inputTokens: 1436,
+                        fileBytes: 2880044,
+                        inputTokens: 7830,
                     },
                 },
                 {
@@ -72,8 +72,8 @@ describe("RunsClient", () => {
                     startedAt: new Date("2026-10-26T17:04:11.380Z"),
                     endedAt: new Date("2026-10-26T17:04:13.912Z"),
                     received: {
-                        fileBytes: 4555564,
-                        inputTokens: 2150,
+                        fileBytes: 4320044,
+                        inputTokens: 11683,
                     },
                 },
             ],
@@ -189,7 +189,7 @@ describe("RunsClient", () => {
             status: "ended",
             started_at: "2026-10-26T17:04:11.380Z",
             ended_at: "2026-10-26T17:04:13.912Z",
-            received: { file_bytes: 4555564, input_tokens: 2150 },
+            received: { file_bytes: 4320044, input_tokens: 11683 },
             request: {
                 context:
                     "A simulated test call in which a voice AI agent helps a caller reschedule an appointment. Both voices are synthetic, and the agent speaks first.",
@@ -235,8 +235,8 @@ describe("RunsClient", () => {
             startedAt: new Date("2026-10-26T17:04:11.380Z"),
             endedAt: new Date("2026-10-26T17:04:13.912Z"),
             received: {
-                fileBytes: 4555564,
-                inputTokens: 2150,
+                fileBytes: 4320044,
+                inputTokens: 11683,
             },
             request: {
                 context:
