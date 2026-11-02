@@ -3,15 +3,14 @@
 import type * as Decisions from "../../api/index.js";
 import * as core from "../../core/index.js";
 import type * as serializers from "../index.js";
-import { Moment } from "./Moment.js";
 
-export const MomentAnswer: core.serialization.ObjectSchema<serializers.MomentAnswer.Raw, Decisions.MomentAnswer> =
+export const SpanQuestion: core.serialization.ObjectSchema<serializers.SpanQuestion.Raw, Decisions.SpanQuestion> =
     core.serialization.object({
-        moments: core.serialization.list(Moment),
+        instructions: core.serialization.string(),
     });
 
-export declare namespace MomentAnswer {
+export declare namespace SpanQuestion {
     export interface Raw {
-        moments: Moment.Raw[];
+        instructions: string;
     }
 }

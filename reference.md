@@ -58,7 +58,7 @@ await client.decisions.create({
                 criteria: ["Not at all", "2", "3", "4", "Extremely"]
             },
             "agent_glitches": {
-                type: "moment",
+                type: "span",
                 instructions: "Where does the agent glitch, slur or sound robotic?"
             }
         }
@@ -154,7 +154,7 @@ await client.decisions.inputTokens({
             criteria: ["Not at all", "2", "3", "4", "Extremely"]
         },
         "agent_glitches": {
-            type: "moment",
+            type: "span",
             instructions: "Where does the agent glitch, slur or sound robotic?"
         }
     }

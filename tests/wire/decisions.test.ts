@@ -28,7 +28,7 @@ describe("DecisionsClient", () => {
                     instructions: "How natural does the agent sound?",
                     criteria: ["Not at all", "2", "3", "4", "Extremely"],
                 },
-                agent_glitches: { type: "moment", instructions: "Where does the agent glitch, slur or sound robotic?" },
+                agent_glitches: { type: "span", instructions: "Where does the agent glitch, slur or sound robotic?" },
             },
         };
         const rawResponseBody = { estimated_input_tokens: 11683 };
@@ -75,7 +75,7 @@ describe("DecisionsClient", () => {
                     criteria: ["Not at all", "2", "3", "4", "Extremely"],
                 },
                 agent_glitches: {
-                    type: "moment",
+                    type: "span",
                     instructions: "Where does the agent glitch, slur or sound robotic?",
                 },
             },

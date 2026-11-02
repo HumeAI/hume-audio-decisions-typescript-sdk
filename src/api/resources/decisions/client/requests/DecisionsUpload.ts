@@ -34,7 +34,7 @@ import type * as Decisions from "../../../../index.js";
  *                     criteria: ["Not at all", "2", "3", "4", "Extremely"]
  *                 },
  *                 "agent_glitches": {
- *                     type: "moment",
+ *                     type: "span",
  *                     instructions: "Where does the agent glitch, slur or sound robotic?"
  *                 }
  *             }
@@ -107,7 +107,7 @@ import type * as Decisions from "../../../../index.js";
  *             context: "A clip from a licensed corpus of scripted speech by consenting voice actors, being labeled to train an expressive text-to-speech model.",
  *             questions: {
  *                 "vocal_bursts": {
- *                     type: "moment",
+ *                     type: "span",
  *                     instructions: "Where does the speaker laugh, sigh, gasp or make another vocal burst?"
  *                 }
  *             }
