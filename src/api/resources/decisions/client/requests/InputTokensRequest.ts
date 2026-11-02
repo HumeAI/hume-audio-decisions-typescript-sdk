@@ -32,7 +32,7 @@ import type * as Decisions from "../../../../index.js";
  *                 criteria: ["Not at all", "2", "3", "4", "Extremely"]
  *             },
  *             "agent_glitches": {
- *                 type: "moment",
+ *                 type: "span",
  *                 instructions: "Where does the agent glitch, slur or sound robotic?"
  *             }
  *         }

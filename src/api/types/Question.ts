@@ -9,7 +9,7 @@ export type Question =
     | Decisions.Question.Noul
     | Decisions.Question.Choice
     | Decisions.Question.Score
-    | Decisions.Question.Moment;
+    | Decisions.Question.Span;
 
 export namespace Question {
     export interface Noul extends Decisions.NoulQuestion {
@@ -24,7 +24,7 @@ export namespace Question {
         type: "score";
     }
 
-    export interface Moment extends Decisions.MomentQuestion {
-        type: "moment";
+    export interface Span extends Decisions.SpanQuestion {
+        type: "span";
     }
 }

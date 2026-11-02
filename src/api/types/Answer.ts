@@ -5,7 +5,7 @@ import type * as Decisions from "../index.js";
 /**
  * The answer to one question. `type` names the question's primitive and determines the answer's fields. Treat an unrecognized `type` as unknown rather than as an error.
  */
-export type Answer = Decisions.Answer.Noul | Decisions.Answer.Choice | Decisions.Answer.Score | Decisions.Answer.Moment;
+export type Answer = Decisions.Answer.Noul | Decisions.Answer.Choice | Decisions.Answer.Score | Decisions.Answer.Span;
 
 export namespace Answer {
     export interface Noul extends Decisions.NoulAnswer {
@@ -20,7 +20,7 @@ export namespace Answer {
         type: "score";
     }
 
-    export interface Moment extends Decisions.MomentAnswer {
-        type: "moment";
+    export interface Span extends Decisions.SpanAnswer {
+        type: "span";
     }
 }
