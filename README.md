@@ -201,7 +201,7 @@ const result = await client.decisions.createChunked({
         context: "A call in which a voice AI agent helps a caller reschedule an appointment.",
         questions: {
             agent_glitches: {
-                type: "moment",
+                type: "span",
                 instructions: "Where does the agent glitch, slur or sound robotic?",
             },
             talks_over_caller: {
@@ -219,16 +219,16 @@ for (const chunk of result.chunks) {
         continue;
     }
     const answer = chunk.response.answers.agent_glitches;
-    if (answer.type === "moment") {
-        for (const moment of answer.moments) {
-            // Moments are measured from the start of the chunk.
-            console.log(`${chunk.startMs + moment.audioStartMs} to ${chunk.startMs + moment.audioEndMs} ms`);
+    if (answer.type === "span") {
+        for (const span of answer.spans) {
+            // Span times are measured from the start of the chunk.
+            console.log(`${chunk.startMs + span.audioStartMs} to ${chunk.startMs + span.audioEndMs} ms`);
         }
     }
 }
 ```
 
-Each chunk's `startMs` and `endMs` give where it starts and ends in the recording, so add its `startMs` to a moment's times to place the moment in the recording. Pass `startMs` and `endMs` to `createChunked` to send only part of the recording.
+Each chunk's `startMs` and `endMs` give where it starts and ends in the recording, so add its `startMs` to a span's times to place the span in the recording. Pass `startMs` and `endMs` to `createChunked` to send only part of the recording.
 
 ### Chunk length
 
@@ -265,14 +265,14 @@ if (result.complete) {
 }
 ```
 
-To ask how much of the call something describes, count the chunks whose `noul` passes a threshold instead. A `moment` answer needs no combining once its times are placed in the recording.
+To ask how much of the call something describes, count the chunks whose `noul` passes a threshold instead. A `span` answer needs no combining once its times are placed in the recording.
 
 ### Where cuts fall
 
 1. A WAV file is cut between samples, after it is mixed down.
-2. An MP3 file is cut between frames, without being decoded, so chunks can differ in length by a frame or more; a frame lasts 24 to 72 ms. A frame can depend on the frames before it, so every chunk after the first starts with frames repeated from the end of the chunk before, usually a fraction of a second and up to about 2 seconds at the lowest bitrates. They count toward `maxChunkMs` and are included in the chunk's `startMs`, so a moment near a cut can appear in both chunks. Most MP3 files also start with a few tens of milliseconds of silence that the encoder added and players skip. Times are measured from where a player starts the file, so the first chunk's `startMs` can be below 0.
+2. An MP3 file is cut between frames, without being decoded, so chunks can differ in length by a frame or more; a frame lasts 24 to 72 ms. A frame can depend on the frames before it, so every chunk after the first starts with frames repeated from the end of the chunk before, usually a fraction of a second and up to about 2 seconds at the lowest bitrates. They count toward `maxChunkMs` and are included in the chunk's `startMs`, so a span near a cut can appear in both chunks. Most MP3 files also start with a few tens of milliseconds of silence that the encoder added and players skip. Times are measured from where a player starts the file, so the first chunk's `startMs` can be below 0.
 
-In both formats, an event that crosses a cut, such as the agent talking over the caller for a second or two around it, is heard in part by each chunk. A `moment` question can return it as two shorter moments, as one that ends or starts at the cut, or not at all, and a `noul` answer about it can come out lower in both chunks than for audio that holds the whole event. The frames an MP3 chunk repeats are there so it can be decoded, and cannot be relied on to cover an event at a cut.
+In both formats, an event that crosses a cut, such as the agent talking over the caller for a second or two around it, is heard in part by each chunk. A `span` question can return it as two shorter spans, as one that ends or starts at the cut, or not at all, and a `noul` answer about it can come out lower in both chunks than for audio that holds the whole event. The frames an MP3 chunk repeats are there so it can be decoded, and cannot be relied on to cover an event at a cut.
 
 ### Failures and resuming
 
@@ -304,7 +304,7 @@ for await (const chunk of client.decisions.iterCreateChunked({
     request: {
         questions: {
             agent_glitches: {
-                type: "moment",
+                type: "span",
                 instructions: "Where does the agent glitch, slur or sound robotic?",
             },
         },
