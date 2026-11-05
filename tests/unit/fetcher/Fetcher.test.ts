@@ -278,14 +278,14 @@ describe("Test fetcherImpl", () => {
         }
     });
 
-    it("should still resolve when a successful response has a plain-text body", async () => {
+    it("should return a non-json error when a successful response has a plain-text body", async () => {
         global.fetch = vi
             .fn()
             .mockResolvedValue(new Response("OK", { status: 200, headers: { "Content-Type": "text/plain" } }));
 
         const result = await fetcherImpl({ url: "https://example.com/items", method: "DELETE", maxRetries: 0 });
 
-        expect(result.ok).toBe(true);
+        expect(result.ok || result.error).toEqual({ reason: "non-json", statusCode: 200, rawBody: "OK" });
     });
 
     it("should keep the status and raw body when a JSON error response is malformed", async () => {
@@ -300,7 +300,7 @@ describe("Test fetcherImpl", () => {
 
         expect(result.ok).toBe(false);
         if (!result.ok) {
-            expect(result.error).toEqual({ reason: "status-code", statusCode: 502, body: "<html>Bad Gateway</html>" });
+            expect(result.error).toEqual({ reason: "non-json", statusCode: 502, rawBody: "<html>Bad Gateway</html>" });
             expect(result.rawResponse.headers.get("X-Request-Id")).toBe("req-502");
         }
     });
@@ -312,11 +312,11 @@ describe("Test fetcherImpl", () => {
 
         expect(result.ok).toBe(false);
         if (!result.ok) {
-            expect(result.error).toEqual({ reason: "status-code", statusCode: 500, body: '{"broken":' });
+            expect(result.error).toEqual({ reason: "non-json", statusCode: 500, rawBody: '{"broken":' });
         }
     });
 
-    it("should still parse valid JSON error bodies and keep plain-text error bodies", async () => {
+    it("should still parse valid JSON error bodies and keep plain-text error bodies as raw text", async () => {
         const fetchMock = vi.fn();
         fetchMock
             .mockResolvedValueOnce(
@@ -336,7 +336,7 @@ describe("Test fetcherImpl", () => {
             statusCode: 400,
             body: { error_code: "INVALID" },
         });
-        expect(text.ok || text.error).toEqual({ reason: "status-code", statusCode: 503, body: "Service Unavailable" });
+        expect(text.ok || text.error).toEqual({ reason: "non-json", statusCode: 503, rawBody: "Service Unavailable" });
     });
 
     it("should time out while reading a slow JSON body", async () => {

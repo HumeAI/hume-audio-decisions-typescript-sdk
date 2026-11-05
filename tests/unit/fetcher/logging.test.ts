@@ -490,7 +490,7 @@ describe("Fetcher Logging Integration", () => {
             );
         });
 
-        it("should log 3xx redirect status codes as success", async () => {
+        it("should log 3xx redirect status codes as errors", async () => {
             const mockLogger = createMockLogger();
             mockSuccessResponse({ data: "test" }, 301, "Moved Permanently");
 
@@ -500,14 +500,14 @@ describe("Fetcher Logging Integration", () => {
                 responseType: "json",
                 maxRetries: 0,
                 logging: {
-                    level: "debug",
+                    level: "error",
                     logger: mockLogger,
                     silent: false,
                 },
             });
 
-            expect(mockLogger.debug).toHaveBeenCalledWith(
-                "HTTP request succeeded",
+            expect(mockLogger.error).toHaveBeenCalledWith(
+                "HTTP request failed with error status",
                 expect.objectContaining({
                     statusCode: 301,
                 }),

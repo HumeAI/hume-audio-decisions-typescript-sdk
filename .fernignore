@@ -7,3 +7,4 @@ LICENSE
 .gitattributes
 src/audio-helpers
 tests/audio-helpers
+tests/responses.test.ts
