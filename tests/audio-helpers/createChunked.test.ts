@@ -57,12 +57,13 @@ function mulawWav(channels: number): Uint8Array<ArrayBuffer> {
 const STEREO_MP3 = () => asset("tone_stereo_mpeg1_32k.mp3");
 const MONO_THEN_STEREO_MP3 = () =>
     bytes(mp3AudioFrames(asset("tone_mpeg1_32k.mp3")), mp3AudioFrames(asset("tone_stereo_mpeg1_32k.mp3")));
-// The stereo tone's first audio frame is 288 bytes, so the file ends partway through a stereo frame.
+// The stereo tone's audio frames are 288 bytes each.
+const STEREO_MP3_FRAME = () => mp3AudioFrames(asset("tone_stereo_mpeg1_32k.mp3")).subarray(0, 288);
+// Files whose mono frames are followed by stereo audio that chunks leave out but a decoder may play.
 const MONO_THEN_CUT_STEREO_MP3 = () =>
-    bytes(
-        mp3AudioFrames(asset("tone_mpeg1_32k.mp3")),
-        mp3AudioFrames(asset("tone_stereo_mpeg1_32k.mp3")).subarray(0, 287),
-    );
+    bytes(mp3AudioFrames(asset("tone_mpeg1_32k.mp3")), STEREO_MP3_FRAME().subarray(0, 287));
+const MONO_THEN_PADDED_STEREO_MP3 = () => bytes(mp3AudioFrames(asset("tone_mpeg1_32k.mp3")), [0], STEREO_MP3_FRAME());
+const MONO_THEN_TAGGED_STEREO_MP3 = () => bytes(asset("tone_mpeg1_32k.mp3"), STEREO_MP3_FRAME());
 // Joined with its tags, so the mono file's ID3v1 tag comes before the stereo file's frames.
 const MONO_AND_STEREO_MP3 = () => bytes(asset("tone_mpeg1_32k.mp3"), asset("tone_stereo_mpeg1_32k.mp3"));
 // The stereo frames sit inside an ID3v2 tag, as in a GEOB frame, so players never decode them.
@@ -700,7 +701,6 @@ describe("create", () => {
     it.each<[string, () => Uint8Array]>([
         ["a stereo MP3 file", STEREO_MP3],
         ["an MP3 file that turns from mono to stereo partway", MONO_THEN_STEREO_MP3],
-        ["an MP3 file whose last frame is stereo and cut short", MONO_THEN_CUT_STEREO_MP3],
     ])("rejects first_channel for %s from every entry point, sending nothing", async (_, file) => {
         const sent: Sent[] = [];
         const audio = file();
@@ -726,6 +726,9 @@ describe("create", () => {
         ["a stereo μ-law WAV file", STEREO_MULAW, "2-channel WAV file the SDK cannot read"],
         ["a FLAC file", FLAC, "file that is neither WAV nor MP3"],
         ["a mono MP3 file and a stereo one joined with their tags", MONO_AND_STEREO_MP3, "MP3 file,"],
+        ["a mono MP3 file whose last frame is stereo and cut short", MONO_THEN_CUT_STEREO_MP3, "2-channel MP3 file"],
+        ["a mono MP3 file with one stereo frame after padding", MONO_THEN_PADDED_STEREO_MP3, "2-channel MP3 file"],
+        ["a mono MP3 file with one stereo frame after its tag", MONO_THEN_TAGGED_STEREO_MP3, "2-channel MP3 file"],
     ])("rejects first_channel for %s, which create would send as it is, sending nothing", async (_, file, says) => {
         const sent: Sent[] = [];
         const audio = file();
@@ -741,6 +744,21 @@ describe("create", () => {
             expectError(error, UnsupportedAudioError, `cannot keep only the first channel of this ${says}`);
         }
         expect(sent).toEqual([]);
+    });
+
+    it.each<[string, () => Uint8Array]>([
+        ["whose last frame is stereo and cut short", MONO_THEN_CUT_STEREO_MP3],
+        ["with one stereo frame after padding", MONO_THEN_PADDED_STEREO_MP3],
+        ["with one stereo frame after its tag", MONO_THEN_TAGGED_STEREO_MP3],
+    ])("chunks a mono MP3 file %s under first_channel, leaving the stereo audio out", async (_, file) => {
+        const chunks = await collect(
+            iterAudioChunks(file(), { maxChunkMs: 300_000, downmixStrategy: "first_channel" }),
+        );
+
+        expectBytes(
+            chunks.map((chunk) => chunk.data),
+            [mp3AudioFrames(asset("tone_mpeg1_32k.mp3"))],
+        );
     });
 
     it.each<[string, () => Uint8Array]>([

@@ -51,11 +51,14 @@ const NO_HEADER_FRAME: HeaderFrame = { leadingSamples: 0, trailingSamples: 0, st
 
 export interface Mp3Audio {
     readonly sampleRate: number;
-    /**
-     * The most channels any audio frame has, since each frame states its own, counting a last frame
-     * cut short. 0 without frames.
-     */
+    /** The most channels any audio frame has, since each frame states its own. 0 without frames. */
     readonly channels: number;
+    /**
+     * The most channels of audio the frames leave out that a decoder may still play when the whole
+     * file is sent: a last frame cut short, or a frame header in the bytes after the last frame. 0
+     * without one.
+     */
+    readonly trailingChannels: number;
     readonly samplesPerFrame: number;
     /** Where each frame starts, followed by where the last one ends. Frames are contiguous. */
     readonly offsets: readonly number[];
@@ -90,14 +93,17 @@ export function parseMp3(data: Uint8Array): Mp3Audio {
     const reservoirBytes: number[] = [];
     const mainDataBytes: number[] = [];
     let channels = 0;
+    let trailingChannels = 0;
     while (offset + 4 <= data.length) {
         if (startsTrailingTag(data, offset)) {
             // Frames after a tag, as in files joined end to end, would be sent but never read here,
             // so their channels and length would go unchecked. Tags can hold binary data, such as
             // cover art or an embedded file, so the search starts after them.
-            if (framesFollow(data, skipTrailingTags(data, offset), first)) {
+            const afterTags = skipTrailingTags(data, offset);
+            if (framesFollow(data, afterTags, first)) {
                 throw unsupported(`audio frames follow a tag at byte ${offset}`);
             }
+            trailingChannels = headerChannels(data, afterTags, first);
             break;
         }
         const header = tryReadHeader(data, offset);
@@ -107,17 +113,18 @@ export function parseMp3(data: Uint8Array): Mp3Audio {
             if (framesFollow(data, offset + 1, first)) {
                 throw unsupported(header);
             }
+            trailingChannels = headerChannels(data, offset + 1, first);
             break;
         }
         if (header.version !== first.version || header.sampleRate !== first.sampleRate) {
             throw unsupported(`the sample rate changes at byte ${offset}`);
         }
-        // A file sent whole still carries a frame cut short, so its channels count too.
-        channels = Math.max(channels, header.channels);
         // A file cut short is read up to its last whole frame.
         if (offset + header.length > data.length) {
+            trailingChannels = header.channels;
             break;
         }
+        channels = Math.max(channels, header.channels);
         offsets.push(offset);
         reservoirBytes.push(readReservoirBytes(data, offset, header));
         mainDataBytes.push(header.length - header.sideInfoStart - header.sideInfoSize);
@@ -130,6 +137,7 @@ export function parseMp3(data: Uint8Array): Mp3Audio {
     return {
         sampleRate: first.sampleRate,
         channels,
+        trailingChannels,
         samplesPerFrame,
         offsets,
         reservoirBytes,
@@ -339,6 +347,22 @@ function framesFollow(data: Uint8Array, offset: number, first: Header): boolean 
         position = data.indexOf(0xff, position + 1);
     }
     return false;
+}
+
+/**
+ * The most channels any frame header of the same version and sample rate as `first` states at or
+ * after `offset`. 0 without one.
+ */
+function headerChannels(data: Uint8Array, offset: number, first: Header): number {
+    // A single header counts here, unlike in framesFollow, since a decoder given the whole file may
+    // play a lone frame that chunks leave out.
+    let channels = 0;
+    let position = data.indexOf(0xff, offset);
+    while (position !== -1) {
+        channels = Math.max(channels, matchingHeader(data, position, first)?.channels ?? 0);
+        position = data.indexOf(0xff, position + 1);
+    }
+    return channels;
 }
 
 function matchingHeader(data: Uint8Array, offset: number, first: Header): Header | undefined {
