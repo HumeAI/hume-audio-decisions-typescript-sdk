@@ -79,7 +79,9 @@ export function isMp3(data: Uint8Array): boolean {
 }
 
 export function parseMp3(data: Uint8Array): Mp3Audio {
-    let offset = skipId3v2(data);
+    // Some writers leave zero bytes after the ID3v2 tag that its size does not count, which decoders
+    // such as ffmpeg skip.
+    let offset = skipZeros(data, skipId3v2(data));
     const first = readHeader(data, offset);
     // The first frame can be a Xing, Info or VBRI header, which holds the length of the whole file
     // instead of audio. Left in a chunk, it would tell players the chunk is that long.

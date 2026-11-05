@@ -243,6 +243,16 @@ describe("iterAudioChunks with MP3 files", () => {
         expect(chunks.map((c) => c.data)).toEqual([concatFrames(all)]);
     });
 
+    it("leaves out zero padding after the ID3v2 tag", async () => {
+        const all = frames(10);
+
+        const chunks = await collect(
+            iterAudioChunks(bytes(id3v2(20), [0, 0, 0, 0], concatFrames(all)), { maxChunkMs: 1000 }),
+        );
+
+        expect(chunks.map((c) => c.data)).toEqual([concatFrames(all)]);
+    });
+
     it.each([
         ["Xing", vbrFrame("Xing", 36)],
         ["Info", vbrFrame("Info", 36)],
