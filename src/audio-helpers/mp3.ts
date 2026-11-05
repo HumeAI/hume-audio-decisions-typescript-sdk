@@ -83,7 +83,15 @@ export function parseMp3(data: Uint8Array): Mp3Audio {
     const reservoirBytes: number[] = [];
     const mainDataBytes: number[] = [];
     let channels = 0;
-    while (offset + 4 <= data.length && !startsTrailingTag(data, offset)) {
+    while (offset + 4 <= data.length) {
+        if (startsTrailingTag(data, offset)) {
+            // Frames after a tag, as in files joined end to end, would be sent but never read here,
+            // so their channels and length would go unchecked.
+            if (framesFollow(data, offset + 1, first)) {
+                throw unsupported(`audio frames follow a tag at byte ${offset}`);
+            }
+            break;
+        }
         const header = tryReadHeader(data, offset);
         if (typeof header === "string") {
             // Players skip bytes after the last frame that are neither a frame nor a tag, such as

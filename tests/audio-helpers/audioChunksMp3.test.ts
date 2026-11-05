@@ -356,6 +356,15 @@ describe("iterAudioChunks with MP3 files", () => {
         expect(rest).toEqual(withIndexes(chunks.slice(1), -1));
     });
 
+    it("rejects an MP3 whose frames continue after a tag, as in files joined end to end", async () => {
+        const all = frames(10);
+        const recording = bytes(concatFrames(all), "TAG", new Uint8Array(125), concatFrames(all));
+
+        const error = await iterationError(iterAudioChunks(recording, { maxChunkMs: 1000 }));
+
+        expectError(error, UnsupportedAudioError, "audio frames follow a tag at byte 4170");
+    });
+
     it("rejects a damaged MP3 before any chunk is produced", async () => {
         const all = frames(100);
         all[90] = new Uint8Array(all[90].length);
