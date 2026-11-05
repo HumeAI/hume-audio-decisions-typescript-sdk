@@ -87,11 +87,26 @@ const MONO_MP3_ENDINGS: [string, () => Uint8Array, () => Uint8Array][] = [
         MONO_MP3_FRAMES,
         () => apeTag(apeItem(TWO_STEREO_MP3_FRAMES()), { header: false }),
     ],
+    [
+        "a stray byte and stereo frames embedded in an ID3v2 tag",
+        MONO_MP3_FRAMES,
+        () => bytes([1], id3v2(TWO_STEREO_MP3_FRAMES())),
+    ],
+    // The first item's size, stored as FF FB 18 00, reads as an MPEG-1 layer III stereo frame header at
+    // 32 kHz.
+    [
+        "an APE tag with no tag header whose first bytes read as a stereo frame header",
+        MONO_MP3_FRAMES,
+        () => apeTag(apeItem(new Uint8Array(0x0018fbff)), { header: false }),
+    ],
 ];
 // Joined with its tags, so the mono file's ID3v1 tag comes before the stereo file's frames.
 const MONO_AND_STEREO_MP3 = () => bytes(asset("tone_mpeg1_32k.mp3"), asset("tone_stereo_mpeg1_32k.mp3"));
 const STEREO_MULAW = () => mulawWav(2);
 const MONO_MULAW = () => mulawWav(1);
+// ffmpeg decodes MP3 audio in a WAV file with the channels its frames state, whatever the header states.
+const STEREO_MP3_IN_MONO_WAV = () =>
+    rawWav({ tag: 0x0055, sampleRate: 32000, channels: 1, bits: 0, data: mp3AudioFrames(STEREO_MP3()) });
 const FLAC = () => bytes("fLaC", pcm(996));
 
 function json(status: number, body: unknown): Response {
@@ -745,6 +760,11 @@ describe("create", () => {
 
     it.each<[string, () => Uint8Array, string]>([
         ["a stereo μ-law WAV file", STEREO_MULAW, "2-channel WAV file the SDK cannot read"],
+        [
+            "a WAV file holding stereo MP3 audio under a mono header",
+            STEREO_MP3_IN_MONO_WAV,
+            "WAV file the SDK cannot read",
+        ],
         ["a FLAC file", FLAC, "file that is neither WAV nor MP3"],
     ])("rejects first_channel for %s, which create would send as it is, sending nothing", async (_, file, says) => {
         const sent: Sent[] = [];
@@ -780,8 +800,15 @@ describe("create", () => {
         expect(sent).toEqual([]);
     });
 
-    it("sends a mono μ-law WAV file as it is under first_channel, since it has one channel", async () => {
-        const audio = MONO_MULAW();
+    it.each<[string, () => Uint8Array]>([
+        ["μ-law", MONO_MULAW],
+        ["IMA ADPCM", () => rawWav({ tag: 0x0011, sampleRate: 8000, bits: 4, data: pcm(4000) })],
+        [
+            "extensible μ-law",
+            () => rawWav({ tag: 0x0007, sampleRate: 8000, bits: 8, extensible: true, data: pcm(8000) }),
+        ],
+    ])("sends a mono %s WAV file as it is under first_channel, since it has one channel", async (_, file) => {
+        const audio = file();
 
         expect(() => checkDownmix(audio, "first_channel")).not.toThrow();
         expectBytes([await uploaded(audio, "first_channel")], [audio]);

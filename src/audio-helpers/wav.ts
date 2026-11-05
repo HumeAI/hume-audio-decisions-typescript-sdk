@@ -6,8 +6,16 @@ import { UnsupportedAudioError } from "./errors.js";
 const CONVERT_COMMAND = "ffmpeg -i input.wav -c:a pcm_s16le output.wav";
 
 const PCM = 0x0001;
+const MS_ADPCM = 0x0002;
 const IEEE_FLOAT = 0x0003;
+const ALAW = 0x0006;
+const MULAW = 0x0007;
+const IMA_ADPCM = 0x0011;
+const GSM_610 = 0x0031;
 const EXTENSIBLE = 0xfffe;
+// Formats whose audio states no channel count of its own, so decoders take it from the header. Audio
+// in other formats can state its own, as MP3 audio does, and ffmpeg decodes the channels it states.
+const HEADER_CHANNEL_FORMATS = [PCM, MS_ADPCM, IEEE_FLOAT, ALAW, MULAW, IMA_ADPCM, GSM_610];
 // An extensible header's subformat GUID is the format tag it stands for followed by these bytes.
 const SUBFORMAT_GUID_SUFFIX = [0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71];
 // Writers that cannot seek back to fill in the size, such as ffmpeg writing to a pipe, leave this.
@@ -79,13 +87,18 @@ export function parseWav(data: Uint8Array): WavAudio {
 }
 
 /**
- * The channels the fmt chunk of a WAV file states, read even from a file `parseWav` rejects, or
- * undefined when it has no fmt chunk.
+ * The channels the first fmt chunk of a WAV file states, read even from a file `parseWav` rejects.
+ * Undefined when it has no fmt chunk, or when its format is not one whose decoders take the channel
+ * count from the header.
  */
 export function wavChannels(data: Uint8Array): number | undefined {
     for (const { offset, start, size } of riffChunks(data)) {
         if (hasBytes(data, offset, "fmt ")) {
-            return size >= 4 && start + 4 <= data.length ? dataView(data).getUint16(start + 2, true) : undefined;
+            const body = data.subarray(start, start + Math.min(size, EXTENSIBLE_FMT_BYTES));
+            const tag = body.length >= 4 ? formatTag(body) : undefined;
+            return tag !== undefined && HEADER_CHANNEL_FORMATS.includes(tag)
+                ? dataView(body).getUint16(2, true)
+                : undefined;
         }
     }
     return undefined;
@@ -169,15 +182,9 @@ function parseFormat(body: Uint8Array): Format {
     const sampleRate = view.getUint32(4, true);
     const blockAlign = view.getUint16(12, true);
     const bits = view.getUint16(14, true);
-    let tag = headerTag;
-    if (tag === EXTENSIBLE) {
-        if (
-            body.length < EXTENSIBLE_FMT_BYTES ||
-            SUBFORMAT_GUID_SUFFIX.some((byte, index) => body[26 + index] !== byte)
-        ) {
-            throw unsupported("unknown extensible subformat");
-        }
-        tag = view.getUint16(24, true);
+    const tag = formatTag(body);
+    if (tag === undefined) {
+        throw unsupported("unknown extensible subformat");
     }
     const widths = SAMPLE_WIDTHS[tag];
     if (widths === undefined) {
@@ -204,6 +211,18 @@ function parseFormat(body: Uint8Array): Format {
     const fmt = fmtBody(headerTag, channels, sampleRate, sampleWidth, bits, extension);
     const channelMask = headerTag === EXTENSIBLE ? view.getUint32(20, true) : 0;
     return { fmt, channels, channelMask, sampleRate, sampleWidth, isFloat: tag === IEEE_FLOAT, frameBytes };
+}
+
+/** The format of a fmt chunk body, read through an extensible header. Undefined for an unknown subformat. */
+function formatTag(body: Uint8Array): number | undefined {
+    const tag = dataView(body).getUint16(0, true);
+    if (tag !== EXTENSIBLE) {
+        return tag;
+    }
+    if (body.length < EXTENSIBLE_FMT_BYTES || SUBFORMAT_GUID_SUFFIX.some((byte, index) => body[26 + index] !== byte)) {
+        return undefined;
+    }
+    return dataView(body).getUint16(24, true);
 }
 
 function fmtBody(

@@ -401,6 +401,7 @@ describe("iterAudioChunks with MP3 files", () => {
             "an ID3v2 tag, zero padding and an ID3v2 tag",
             (contents: Uint8Array) => bytes(id3v2(10), [0, 0], id3v2(contents)),
         ],
+        ["a stray byte and an ID3v2 tag", (contents: Uint8Array) => bytes([1], id3v2(contents))],
         [
             "a stray byte and an ID3v2 tag with a footer",
             (contents: Uint8Array) => bytes([1], id3v2(contents, { footer: true })),
@@ -414,6 +415,31 @@ describe("iterAudioChunks with MP3 files", () => {
         const chunks = await collect(iterAudioChunks(recording, { maxChunkMs: 1000 }));
 
         expect(chunks.map((c) => c.data)).toEqual([concatFrames(all)]);
+    });
+
+    it("leaves out an APE tag without a header whose first bytes read as a frame header", async () => {
+        const all = frames(10);
+        // The first item's size, stored as FF FB 10 00, reads as an MPEG-1 layer III frame header at
+        // 44.1 kHz.
+        const recording = bytes(concatFrames(all), apeTag(apeItem(new Uint8Array(0x0010fbff)), { header: false }));
+
+        const chunks = await collect(iterAudioChunks(recording, { maxChunkMs: 1000 }));
+
+        expect(chunks.map((c) => c.data)).toEqual([concatFrames(all)]);
+    });
+
+    it("rejects an MP3 whose frames continue after a tag at another sample rate", async () => {
+        // At 48 kHz, a 128 kbit/s frame is 384 bytes long.
+        const recording = bytes(
+            concatFrames(frames(10)),
+            "TAG",
+            new Uint8Array(125),
+            concatFrames(frames(10, { sampleRateIndex: 1, length: 384 })),
+        );
+
+        const error = await iterationError(iterAudioChunks(recording, { maxChunkMs: 1000 }));
+
+        expectError(error, UnsupportedAudioError, "audio frames follow a tag at byte 4170");
     });
 
     it("rejects an MP3 whose frames continue after zero padding and a tag", async () => {
