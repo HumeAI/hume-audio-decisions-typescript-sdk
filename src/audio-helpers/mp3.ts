@@ -265,13 +265,13 @@ function skipZeros(data: Uint8Array, offset: number): number {
 }
 
 /**
- * Where the tags that start at `offset` end. A tag whose size is not stated, as in a Lyrics3 tag, or
+ * Where the tags that start at `offset`, and any zero padding between them, end. A tag whose size is not stated, as in a Lyrics3 tag, or
  * that would run past the end of `data` is not skipped, so its bytes are searched for frames too.
  */
 function skipTrailingTags(data: Uint8Array, offset: number): number {
     let end = trailingTagEnd(data, offset);
     while (end !== undefined && end <= data.length) {
-        offset = end;
+        offset = skipZeros(data, end);
         end = trailingTagEnd(data, offset);
     }
     return offset;

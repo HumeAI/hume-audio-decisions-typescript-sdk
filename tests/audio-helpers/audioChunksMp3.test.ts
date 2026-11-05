@@ -388,6 +388,10 @@ describe("iterAudioChunks with MP3 files", () => {
     it.each([
         ["zero padding and an ID3v2 tag", (contents: Uint8Array) => bytes([0, 0], id3v2(contents))],
         [
+            "an ID3v2 tag, zero padding and an ID3v2 tag",
+            (contents: Uint8Array) => bytes(id3v2(10), [0, 0], id3v2(contents)),
+        ],
+        [
             "a stray byte and an ID3v2 tag with a footer",
             (contents: Uint8Array) => bytes([1], id3v2(contents, { footer: true })),
         ],
