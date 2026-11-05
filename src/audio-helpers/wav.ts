@@ -70,7 +70,8 @@ export function parseWav(data: Uint8Array): WavAudio {
             const audioBytes = unclosed || size === UNKNOWN_SIZE ? available : Math.min(size, available);
             return { ...format, dataStart: start, sampleCount: Math.floor(audioBytes / format.frameBytes) };
         }
-        if (hasBytes(data, offset, "fmt ")) {
+        // ffmpeg reads only the first fmt chunk, so a later one does not describe the audio the API hears.
+        if (format === undefined && hasBytes(data, offset, "fmt ")) {
             format = parseFormat(data.subarray(start, start + Math.min(size, EXTENSIBLE_FMT_BYTES)));
         }
     }

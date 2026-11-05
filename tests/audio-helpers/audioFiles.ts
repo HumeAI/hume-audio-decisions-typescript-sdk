@@ -159,6 +159,12 @@ export function apeTag(items: Uint8Array, { header = true }: { header?: boolean 
     return header ? bytes(fields(0xa0000000), items, footer) : bytes(items, footer);
 }
 
+/** Builds a binary APE tag item holding `value`, as cover art is stored. */
+export function apeItem(value: Uint8Array): Uint8Array {
+    // An item starts with its value's size, its flags, here binary, and its key.
+    return bytes(uint32(value.length), uint32(2), "Cover Art (Front)", [0], value);
+}
+
 /**
  * The audio frames of an MPEG-1 layer III file as ffmpeg writes it, without its ID3 tags or the Info
  * frame before the audio. It is read here rather than by the SDK, so the files built from it do not
