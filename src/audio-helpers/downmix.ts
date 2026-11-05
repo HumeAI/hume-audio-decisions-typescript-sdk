@@ -69,8 +69,9 @@ type Sending =
  * The SDK cannot take a channel out of an MP3 file, a WAV file it cannot read, or a file of any other
  * format, and sends such a file as it is. So with "first_channel", `create` rejects such a file unless
  * it can tell the file has only one channel: an MP3 file whose audio frames are all mono, or a WAV
- * file whose header states one channel. It sends a mono MP3 file only up to the end of its last whole
- * frame, leaving out tags and any other bytes after it, since only the frames are known to be mono.
+ * file whose header states one channel in a format whose audio cannot state another, such as μ-law
+ * or ADPCM. It sends a mono MP3 file only up to the end of its last whole frame, leaving out tags and
+ * any other bytes after it, since only the frames are known to be mono.
  * `createChunked` and `iterAudioChunks` reject an MP3 file the same way, and reject a WAV file they
  * cannot read, or a file of another format, under every strategy.
  *

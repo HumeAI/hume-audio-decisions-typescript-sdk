@@ -21,7 +21,7 @@ const MONO = 3;
 const DECODER_DELAY = 529;
 // Encoders whose header frame carries a LAME tag, which states the samples added at each end.
 const LAME_TAG_ENCODERS = ["LAME", "Lavf", "Lavc"];
-// Tags that some writers append after the last frame. Nothing after one is audio.
+// Tags that some writers append after the last frame.
 const TRAILING_TAGS = ["TAG", "APETAGEX", "LYRICSBEGIN", "ID3"];
 const ID3V1_SIZE = 128;
 const APE_HEADER_SIZE = 32;
@@ -31,6 +31,10 @@ const APE_IS_HEADER = 0x20000000;
 const APE_HAS_HEADER = 0x80000000;
 // The size of an ID3v2 tag's header, and of its footer when it has one.
 const ID3V2_HEADER_SIZE = 10;
+// 1 for each byte a frame or a tag that states its size can start with, and 0 for every other byte.
+const SEARCH_STARTS = Uint8Array.from({ length: 256 }, (_, byte) =>
+    byte === 0xff || ["TAG", "APETAGEX", "ID3"].some((tag) => tag.charCodeAt(0) === byte) ? 1 : 0,
+);
 
 interface Header {
     readonly version: number;
@@ -93,32 +97,26 @@ export function parseMp3(data: Uint8Array): Mp3Audio {
     const reservoirBytes: number[] = [];
     const mainDataBytes: number[] = [];
     let channels = 0;
-    while (offset + 4 <= data.length) {
-        // Some writers pad the audio with zero bytes before the tags after it.
-        const tag = skipZeros(data, offset);
-        if (startsTrailingTag(data, tag)) {
-            // Frames after a tag, as in files joined end to end, would be sent but never read here,
-            // so their channels and length would go unchecked. Tags can hold binary data, such as
-            // cover art or an embedded file, so the search starts after them.
-            if (framesFollow(data, skipTrailingTags(data, tag), first)) {
-                throw unsupported(`audio frames follow a tag at byte ${tag}`);
-            }
-            break;
-        }
+    // An APE tag without a header can start with bytes that read as a frame header, so no frame is
+    // read from the tags found from the end of the file.
+    const audioEnd = endTagsStart(data);
+    while (offset + 4 <= audioEnd) {
         const header = tryReadHeader(data, offset);
         if (typeof header === "string") {
-            // Players skip bytes after the last frame that are neither a frame nor a tag, such as
-            // padding. When frames follow them, the bytes are damage instead.
-            if (framesFollow(data, offset + 1, first)) {
-                throw unsupported(header);
+            // Players skip tags and padding after the last frame. Frames after them, as in files joined
+            // end to end, would be sent but never read here, so their channels and length would go
+            // unchecked.
+            if (framesFollow(data, offset, audioEnd)) {
+                const tag = skipZeros(data, offset);
+                throw unsupported(startsTrailingTag(data, tag) ? `audio frames follow a tag at byte ${tag}` : header);
             }
             break;
         }
         if (header.version !== first.version || header.sampleRate !== first.sampleRate) {
             throw unsupported(`the sample rate changes at byte ${offset}`);
         }
-        // A file cut short is read up to its last whole frame.
-        if (offset + header.length > data.length) {
+        // A file cut short, or a frame that runs into a tag, is read up to its last whole frame.
+        if (offset + header.length > audioEnd) {
             break;
         }
         channels = Math.max(channels, header.channels);
@@ -267,18 +265,9 @@ function skipZeros(data: Uint8Array, offset: number): number {
 }
 
 /**
- * Where the tags that start at `offset`, and any zero padding between them, end. A tag whose size is not stated, as in a Lyrics3 tag, or
- * that would run past the end of `data` is not skipped, so its bytes are searched for frames too.
+ * Where the tag at `offset` ends by the size it states, which can be past the end of `data`. Undefined
+ * without one, or for a tag that states no size, as in a Lyrics3 tag.
  */
-function skipTrailingTags(data: Uint8Array, offset: number): number {
-    let end = trailingTagEnd(data, offset);
-    while (end !== undefined && end <= data.length) {
-        offset = skipZeros(data, end);
-        end = trailingTagEnd(data, offset);
-    }
-    return offset;
-}
-
 function trailingTagEnd(data: Uint8Array, offset: number): number | undefined {
     if (hasBytes(data, offset, "TAG")) {
         return offset + ID3V1_SIZE;
@@ -379,31 +368,43 @@ function readHeaderFrame(data: Uint8Array, offset: number, header: Header): Head
 }
 
 /**
- * Whether two frames in a row, of the same version and sample rate as `first`, start at or after
- * `offset`, before the tags that end the file.
+ * Whether two frames in a row, of the same version and sample rate, start from `offset` to `end`,
+ * outside the tags there. Tags can hold binary data, such as cover art or an embedded MP3 file, so
+ * each is skipped by the size it states, wherever it starts. A tag that states no size, or whose size
+ * runs past `end`, is searched too, since its bytes cannot be told apart from damage.
  */
-function framesFollow(data: Uint8Array, offset: number, first: Header): boolean {
-    // An APE tag without a header cannot be found from its start, and neither can a tag after bytes
-    // that are not a tag, so these tags are found from where they end.
-    const audio = data.subarray(0, endTagsStart(data));
-    // Requiring two frames in a row keeps bytes that happen to look like a frame header from counting.
-    let position = audio.indexOf(0xff, offset);
-    while (position !== -1) {
-        const header = matchingHeader(audio, position, first);
-        if (header !== undefined && matchingHeader(audio, position + header.length, first) !== undefined) {
+function framesFollow(data: Uint8Array, offset: number, end: number): boolean {
+    const audio = data.subarray(0, end);
+    let position = offset;
+    while (position < end) {
+        // Bytes that cannot start a frame or a tag are passed over first, which keeps the search fast
+        // over long runs of them.
+        if (SEARCH_STARTS[audio[position]] === 0) {
+            position += 1;
+            continue;
+        }
+        const tagEnd = trailingTagEnd(audio, position);
+        if (tagEnd !== undefined && tagEnd <= end) {
+            position = tagEnd;
+            continue;
+        }
+        // Requiring two frames in a row keeps bytes that happen to look like a frame header from counting.
+        // Frames at another sample rate count too, since they would be sent but never read here.
+        const header = tryReadHeader(audio, position);
+        if (typeof header !== "string" && matchingHeader(audio, position + header.length, header) !== undefined) {
             return true;
         }
-        position = audio.indexOf(0xff, position + 1);
+        position += 1;
     }
     return false;
 }
 
-function matchingHeader(data: Uint8Array, offset: number, first: Header): Header | undefined {
+function matchingHeader(data: Uint8Array, offset: number, previous: Header): Header | undefined {
     const header = tryReadHeader(data, offset);
     if (typeof header === "string") {
         return undefined;
     }
-    return header.version === first.version && header.sampleRate === first.sampleRate ? header : undefined;
+    return header.version === previous.version && header.sampleRate === previous.sampleRate ? header : undefined;
 }
 
 function unsupported(reason: string): UnsupportedAudioError {
