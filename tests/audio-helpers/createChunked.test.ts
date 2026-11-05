@@ -17,6 +17,7 @@ import {
     collect,
     expectBytes,
     expectError,
+    id3v2,
     iterationError,
     mp3AudioFrames,
     pcm,
@@ -58,6 +59,9 @@ const MONO_THEN_STEREO_MP3 = () =>
     bytes(mp3AudioFrames(asset("tone_mpeg1_32k.mp3")), mp3AudioFrames(asset("tone_stereo_mpeg1_32k.mp3")));
 // Joined with its tags, so the mono file's ID3v1 tag comes before the stereo file's frames.
 const MONO_AND_STEREO_MP3 = () => bytes(asset("tone_mpeg1_32k.mp3"), asset("tone_stereo_mpeg1_32k.mp3"));
+// The stereo frames sit inside an ID3v2 tag, as in a GEOB frame, so players never decode them.
+const MONO_MP3_EMBEDDING_STEREO = () =>
+    bytes(asset("tone_mpeg1_32k.mp3"), id3v2(mp3AudioFrames(asset("tone_stereo_mpeg1_32k.mp3"))));
 const STEREO_MULAW = () => mulawWav(2);
 const MONO_MULAW = () => mulawWav(1);
 const FLAC = () => bytes("fLaC", pcm(996));
@@ -735,6 +739,7 @@ describe("create", () => {
     it.each<[string, () => Uint8Array]>([
         ["a mono μ-law WAV file", MONO_MULAW],
         ["a mono MP3 file", () => asset("tone_mpeg1_32k.mp3")],
+        ["a mono MP3 file with a stereo one embedded in a tag after its frames", MONO_MP3_EMBEDDING_STEREO],
     ])("sends %s as it is under first_channel, since it has one channel", async (_, file) => {
         const audio = file();
 
