@@ -12,6 +12,7 @@ import {
 import { DecisionsClient } from "../../src/Client";
 import { DecisionsError } from "../../src/errors/index";
 import {
+    apeItem,
     apeTag,
     asset,
     bytes,
@@ -27,7 +28,6 @@ import {
     samplesWav,
     thrownBy,
     times,
-    uint32,
     wavFile,
 } from "./audioFiles";
 
@@ -61,6 +61,7 @@ const MONO_THEN_STEREO_MP3 = () =>
     bytes(mp3AudioFrames(asset("tone_mpeg1_32k.mp3")), mp3AudioFrames(asset("tone_stereo_mpeg1_32k.mp3")));
 // The stereo tone's audio frames are 288 bytes each.
 const STEREO_MP3_FRAME = () => mp3AudioFrames(asset("tone_stereo_mpeg1_32k.mp3")).subarray(0, 288);
+const TWO_STEREO_MP3_FRAMES = () => mp3AudioFrames(asset("tone_stereo_mpeg1_32k.mp3")).subarray(0, 576);
 const MONO_MP3_FRAMES = () => mp3AudioFrames(asset("tone_mpeg1_32k.mp3"));
 // The mono tone's ID3v2 tag, Info frame and audio frames, without the ID3v1 tag that ends the file.
 const MONO_MP3_TO_LAST_FRAME = () => asset("tone_mpeg1_32k.mp3").subarray(0, -128);
@@ -77,15 +78,14 @@ const MONO_MP3_ENDINGS: [string, () => Uint8Array, () => Uint8Array][] = [
         () => bytes(MONO_MP3_ID3V1(), id3v2(mp3AudioFrames(asset("tone_stereo_mpeg1_32k.mp3")))),
     ],
     [
-        "a stereo frame embedded in an ID3v2 tag after padding",
+        "stereo frames embedded in an ID3v2 tag after padding",
         MONO_MP3_FRAMES,
-        () => bytes([0], id3v2(STEREO_MP3_FRAME())),
+        () => bytes([0], id3v2(TWO_STEREO_MP3_FRAMES())),
     ],
     [
-        "a stereo frame in an APE tag item, with no tag header",
+        "stereo frames in an APE tag item, with no tag header",
         MONO_MP3_FRAMES,
-        // An APE item starts with its value's size, its flags, here binary, and its key.
-        () => apeTag(bytes(uint32(288), uint32(2), "Cover Art (Front)", [0], STEREO_MP3_FRAME()), { header: false }),
+        () => apeTag(apeItem(TWO_STEREO_MP3_FRAMES()), { header: false }),
     ],
 ];
 // Joined with its tags, so the mono file's ID3v1 tag comes before the stereo file's frames.
@@ -746,7 +746,6 @@ describe("create", () => {
     it.each<[string, () => Uint8Array, string]>([
         ["a stereo μ-law WAV file", STEREO_MULAW, "2-channel WAV file the SDK cannot read"],
         ["a FLAC file", FLAC, "file that is neither WAV nor MP3"],
-        ["a mono MP3 file and a stereo one joined with their tags", MONO_AND_STEREO_MP3, "MP3 file,"],
     ])("rejects first_channel for %s, which create would send as it is, sending nothing", async (_, file, says) => {
         const sent: Sent[] = [];
         const audio = file();
@@ -760,6 +759,23 @@ describe("create", () => {
 
         for (const error of errors) {
             expectError(error, UnsupportedAudioError, `cannot keep only the first channel of this ${says}`);
+        }
+        expect(sent).toEqual([]);
+    });
+
+    it("rejects first_channel for an MP3 file it cannot read with the reason, sending nothing", async () => {
+        const sent: Sent[] = [];
+        const audio = MONO_AND_STEREO_MP3();
+
+        const errors = [
+            await rejection(
+                decisions(sent).create({ request: REQUEST, file: audio, downmixStrategy: "first_channel" }),
+            ),
+            thrownBy(() => checkDownmix(audio, "first_channel")),
+        ];
+
+        for (const error of errors) {
+            expectError(error, UnsupportedAudioError, "audio frames follow a tag at byte 16512");
         }
         expect(sent).toEqual([]);
     });

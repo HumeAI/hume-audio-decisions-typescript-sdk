@@ -6,7 +6,18 @@ import {
     iterAudioChunks,
     UnsupportedAudioError,
 } from "../../src/audio-helpers/index";
-import { apeTag, asset, bytes, collect, expectBytes, expectError, id3v2, iterationError, times } from "./audioFiles";
+import {
+    apeItem,
+    apeTag,
+    asset,
+    bytes,
+    collect,
+    expectBytes,
+    expectError,
+    id3v2,
+    iterationError,
+    times,
+} from "./audioFiles";
 
 const MPEG1 = 3;
 const MPEG2 = 2;
@@ -370,6 +381,34 @@ describe("iterAudioChunks with MP3 files", () => {
         const chunks = await collect(iterAudioChunks(recording, { maxChunkMs: 1000 }));
 
         expect(chunks.map((c) => c.data)).toEqual([concatFrames(all)]);
+    });
+
+    // Tags can follow bytes that are not a tag, and an APE tag without a header can only be found from
+    // its footer.
+    it.each([
+        ["zero padding and an ID3v2 tag", (contents: Uint8Array) => bytes([0, 0], id3v2(contents))],
+        [
+            "a stray byte and an ID3v2 tag with a footer",
+            (contents: Uint8Array) => bytes([1], id3v2(contents, { footer: true })),
+        ],
+        ["an APE tag without a header", (contents: Uint8Array) => apeTag(apeItem(contents), { header: false })],
+        ["a stray byte and an APE tag", (contents: Uint8Array) => bytes([1], apeTag(apeItem(contents)))],
+    ])("reads an MP3 whose frames end with %s holding MP3 frames, then an ID3v1 tag", async (_, tag) => {
+        const all = frames(10);
+        const recording = bytes(concatFrames(all), tag(concatFrames(frames(2))), "TAG", new Uint8Array(125));
+
+        const chunks = await collect(iterAudioChunks(recording, { maxChunkMs: 1000 }));
+
+        expect(chunks.map((c) => c.data)).toEqual([concatFrames(all)]);
+    });
+
+    it("rejects an MP3 whose frames continue after zero padding and a tag", async () => {
+        const all = frames(10);
+        const recording = bytes(concatFrames(all), [0, 0], id3v2(10), concatFrames(all));
+
+        const error = await iterationError(iterAudioChunks(recording, { maxChunkMs: 1000 }));
+
+        expectError(error, UnsupportedAudioError, "audio frames follow a tag at byte 4172");
     });
 
     it("rejects an MP3 whose frames continue after a tag holding MP3 frames", async () => {

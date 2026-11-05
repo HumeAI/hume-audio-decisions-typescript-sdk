@@ -19,7 +19,8 @@ export interface DownmixOptions {
      * read, or files of other formats, so it sends them as they are, and "first_channel" rejects such
      * a file with an UnsupportedAudioError, sending nothing, unless it can tell the file has only one
      * channel. It then sends a mono MP3 file only up to the end of its last whole frame, leaving out
-     * tags and any other bytes after it. `checkDownmix` in `@humeai/audio-decisions/audio-helpers` finds this before sending.
+     * tags and any other bytes after it. `checkDownmix` in `@humeai/audio-decisions/audio-helpers`
+     * finds this before sending.
      * Unless it is "none", `create` reads the whole file into memory before sending it, since it must
      * read the file to tell whether it is a WAV file. `iterAudioChunks` in `@humeai/audio-decisions/audio-helpers` describes each.
      */

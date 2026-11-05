@@ -142,6 +142,19 @@ describe("iterAudioChunks with WAV files", () => {
         expect(chunk.data.slice(chunk.data.length - audio.length)).toEqual(audio);
     });
 
+    it("reads the first of two fmt chunks, as ffmpeg does", async () => {
+        const stereo = rawWav({ channels: 2, data: pcm(16 * 4 * 10) });
+        // A mono fmt chunk, from its ID to the end of its body, after the stereo one.
+        const monoFmt = rawWav({ data: new Uint8Array(0) }).subarray(12, 36);
+        const recording = bytes(stereo.subarray(0, 36), monoFmt, stereo.subarray(36));
+        new DataView(recording.buffer).setUint32(4, recording.length - 8, true);
+        const options = { maxChunkMs: 10, downmixStrategy: "first_channel" } as const;
+
+        const chunks = await collect(iterAudioChunks(recording, options));
+
+        expect(chunks).toEqual(await collect(iterAudioChunks(stereo, options)));
+    });
+
     it("corrects a block size left at 1 in the chunks", async () => {
         const audio = pcm(16 * 2 * 10);
         const recording = rawWav({ data: audio, blockAlign: 1 });

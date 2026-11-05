@@ -27,6 +27,10 @@ const ID3V1_SIZE = 128;
 const APE_HEADER_SIZE = 32;
 // Set in the flags of an APE tag's header, which comes before the items, and clear in its footer.
 const APE_IS_HEADER = 0x20000000;
+// Set in the flags of both the header and the footer of an APE tag that has a header.
+const APE_HAS_HEADER = 0x80000000;
+// The size of an ID3v2 tag's header, and of its footer when it has one.
+const ID3V2_HEADER_SIZE = 10;
 
 interface Header {
     readonly version: number;
@@ -88,12 +92,14 @@ export function parseMp3(data: Uint8Array): Mp3Audio {
     const mainDataBytes: number[] = [];
     let channels = 0;
     while (offset + 4 <= data.length) {
-        if (startsTrailingTag(data, offset)) {
+        // Some writers pad the audio with zero bytes before the tags after it.
+        const tag = skipZeros(data, offset);
+        if (startsTrailingTag(data, tag)) {
             // Frames after a tag, as in files joined end to end, would be sent but never read here,
             // so their channels and length would go unchecked. Tags can hold binary data, such as
             // cover art or an embedded file, so the search starts after them.
-            if (framesFollow(data, skipTrailingTags(data, offset), first)) {
-                throw unsupported(`audio frames follow a tag at byte ${offset}`);
+            if (framesFollow(data, skipTrailingTags(data, tag), first)) {
+                throw unsupported(`audio frames follow a tag at byte ${tag}`);
             }
             break;
         }
@@ -199,16 +205,63 @@ function skipId3v2(data: Uint8Array): number {
 
 /** Where the ID3v2 tag at `offset` ends, which can be past the end of `data`. Undefined without one. */
 function id3v2End(data: Uint8Array, offset: number): number | undefined {
-    if (!hasBytes(data, offset, "ID3") || offset + 10 > data.length) {
+    if (!hasBytes(data, offset, "ID3") || offset + ID3V2_HEADER_SIZE > data.length) {
         return undefined;
     }
     const flags = data[offset + 5];
+    return offset + ID3V2_HEADER_SIZE + id3v2Size(data, offset) + (flags & 0x10 ? ID3V2_HEADER_SIZE : 0);
+}
+
+/** The size of the ID3v2 tag whose header or footer starts at `offset`, without either. */
+function id3v2Size(data: Uint8Array, offset: number): number {
     // ID3v2 sizes store 7 bits in each byte.
     let size = 0;
     for (let index = offset + 6; index < offset + 10; index++) {
         size = (size << 7) | (data[index] & 0x7f);
     }
-    return offset + 10 + size + (flags & 0x10 ? 10 : 0);
+    return size;
+}
+
+/**
+ * Where the tags that end the file start. ID3v1 tags, APE tags and ID3v2 tags with a footer each
+ * state their size at their end, so they are found from the end of the file, whatever comes between
+ * them and the last frame.
+ */
+function endTagsStart(data: Uint8Array): number {
+    let end = data.length;
+    for (let start = endTagStart(data, end); start !== undefined; start = endTagStart(data, end)) {
+        end = start;
+    }
+    return end;
+}
+
+/** Where the tag that ends at `end` starts. Undefined without one. */
+function endTagStart(data: Uint8Array, end: number): number | undefined {
+    if (hasBytes(data, end - ID3V1_SIZE, "TAG")) {
+        return end - ID3V1_SIZE;
+    }
+    const apeFooter = end - APE_HEADER_SIZE;
+    if (hasBytes(data, apeFooter, "APETAGEX")) {
+        const view = dataView(data);
+        // The size counts the items and the footer, but not the header.
+        const size = view.getUint32(apeFooter + 12, true);
+        const flags = view.getUint32(apeFooter + 20, true);
+        const start = end - size - (flags & APE_HAS_HEADER ? APE_HEADER_SIZE : 0);
+        return flags & APE_IS_HEADER || size < APE_HEADER_SIZE || start < 0 ? undefined : start;
+    }
+    const id3v2Footer = end - ID3V2_HEADER_SIZE;
+    if (hasBytes(data, id3v2Footer, "3DI")) {
+        const start = id3v2Footer - id3v2Size(data, id3v2Footer) - ID3V2_HEADER_SIZE;
+        return hasBytes(data, start, "ID3") ? start : undefined;
+    }
+    return undefined;
+}
+
+function skipZeros(data: Uint8Array, offset: number): number {
+    while (offset < data.length && data[offset] === 0) {
+        offset += 1;
+    }
+    return offset;
 }
 
 /**
@@ -323,16 +376,22 @@ function readHeaderFrame(data: Uint8Array, offset: number, header: Header): Head
     };
 }
 
-/** Whether two frames in a row, of the same version and sample rate as `first`, start at or after `offset`. */
+/**
+ * Whether two frames in a row, of the same version and sample rate as `first`, start at or after
+ * `offset`, before the tags that end the file.
+ */
 function framesFollow(data: Uint8Array, offset: number, first: Header): boolean {
+    // An APE tag without a header cannot be found from its start, and neither can a tag after bytes
+    // that are not a tag, so these tags are found from where they end.
+    const audio = data.subarray(0, endTagsStart(data));
     // Requiring two frames in a row keeps bytes that happen to look like a frame header from counting.
-    let position = data.indexOf(0xff, offset);
+    let position = audio.indexOf(0xff, offset);
     while (position !== -1) {
-        const header = matchingHeader(data, position, first);
-        if (header !== undefined && matchingHeader(data, position + header.length, first) !== undefined) {
+        const header = matchingHeader(audio, position, first);
+        if (header !== undefined && matchingHeader(audio, position + header.length, first) !== undefined) {
             return true;
         }
-        position = data.indexOf(0xff, position + 1);
+        position = audio.indexOf(0xff, position + 1);
     }
     return false;
 }
