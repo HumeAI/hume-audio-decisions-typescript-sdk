@@ -2,8 +2,8 @@
 
 import type { DecisionsUpload } from "../api/resources/decisions/client/requests/DecisionsUpload.js";
 import { toMultipartDataPart, type Uploadable } from "../core/file/index.js";
-import { checkDownmixStrategy, type DownmixStrategy, downmixWav } from "./downmix.js";
-import { isWav, parseWav, type WavAudio, wavChunk } from "./wav.js";
+import { checkDownmixStrategy, type DownmixStrategy, mixDown, sendingOf } from "./downmix.js";
+import { wavChunk } from "./wav.js";
 
 interface ReadFile {
     readonly data: Uint8Array;
@@ -15,7 +15,10 @@ export interface DownmixOptions {
     /**
      * How a WAV file is mixed down before it is sent: "mix", the default, mixes it the way the API
      * does, so the model hears the same audio; "first_channel" keeps only the first channel; and
-     * "none" sends it as it is. MP3 files, and WAV files the SDK cannot read, are sent as they are.
+     * "none" sends it as it is. The SDK cannot take a channel out of MP3 files, WAV files it cannot
+     * read, or files of other formats, so it sends them as they are, and "first_channel" rejects such
+     * a file with an UnsupportedAudioError, sending nothing, unless it can tell the file has only one
+     * channel. `checkDownmix` in `@humeai/audio-decisions/audio-helpers` finds this before sending.
      * Unless it is "none", `create` reads the whole file into memory before sending it, since it must
      * read the file to tell whether it is a WAV file. `iterAudioChunks` in `@humeai/audio-decisions/audio-helpers` describes each.
      */
@@ -61,18 +64,12 @@ async function downmixFile(
     strategy: DownmixStrategy,
     signal: AbortSignal | undefined,
 ): Promise<Uint8Array> {
-    if (!isWav(data)) {
+    const sending = sendingOf(data, strategy);
+    if (sending.asIs) {
         return data;
     }
-    let wav: WavAudio;
-    try {
-        wav = parseWav(data);
-    } catch {
-        // A WAV file this parser cannot read may still be one the API can decode, so it is left to the API.
-        return data;
-    }
-    const mixed = await downmixWav(data, wav, strategy, signal);
-    return mixed === undefined ? data : wavChunk(mixed.data, mixed.wav, 0, mixed.wav.sampleCount);
+    const mixed = await mixDown(data, sending.wav, sending.plan, signal);
+    return wavChunk(mixed.data, mixed.wav, 0, mixed.wav.sampleCount);
 }
 
 async function readBytes(data: Uploadable.FileLike): Promise<Uint8Array> {

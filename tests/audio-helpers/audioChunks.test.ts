@@ -7,6 +7,7 @@ import {
     expectError,
     iterationError,
     pcm,
+    rawWav,
     readWav,
     thrownBy,
     times,
@@ -14,62 +15,6 @@ import {
     uint32,
     wavFile,
 } from "./audioFiles";
-
-function rawWav({
-    tag = 0x0001,
-    sampleRate = 16000,
-    channels = 1,
-    bits = 16,
-    data,
-    extensible = false,
-    dataSize,
-    afterData = new Uint8Array(0),
-    blockAlign = channels * ((bits + 7) >> 3),
-    riffSize,
-    riffId = "RIFF",
-}: {
-    tag?: number;
-    sampleRate?: number;
-    channels?: number;
-    bits?: number;
-    data: Uint8Array;
-    extensible?: boolean;
-    dataSize?: number;
-    afterData?: Uint8Array;
-    blockAlign?: number;
-    riffSize?: number;
-    riffId?: string;
-}): Uint8Array {
-    let fmt = bytes(
-        uint16(extensible ? 0xfffe : tag),
-        uint16(channels),
-        uint32(sampleRate),
-        uint32(0),
-        uint16(blockAlign),
-        uint16(bits),
-    );
-    if (extensible) {
-        const subformat = bytes(uint16(tag), [0, 0, 0, 0, 0x10, 0, 0x80, 0, 0, 0xaa, 0, 0x38, 0x9b, 0x71]);
-        fmt = bytes(fmt, uint16(22), uint16(bits), uint32(0), subformat);
-    }
-    // An odd-sized chunk before the data exercises the padding byte that follows it.
-    const info = bytes("INFOISFT", uint32(5), "Lavf", [0]);
-    const body = bytes(
-        "WAVE",
-        "fmt ",
-        uint32(fmt.length),
-        fmt,
-        "LIST",
-        uint32(info.length),
-        info,
-        [0],
-        "data",
-        uint32(dataSize ?? data.length),
-        data,
-        afterData,
-    );
-    return bytes(riffId, uint32(riffSize ?? body.length), body);
-}
 
 function mono16k(data: Uint8Array): Uint8Array {
     return wavFile({ sampleRate: 16000, channels: 1, sampleWidth: 2, data });
@@ -271,6 +216,19 @@ describe("iterAudioChunks with WAV files", () => {
 
         expectError(error, UnsupportedAudioError, message);
         expect(error.message).toContain("ffmpeg -i input.wav");
+    });
+
+    it.each([
+        ["a stereo μ-law WAV file", rawWav({ tag: 0x0007, sampleRate: 8000, channels: 2, bits: 8, data: pcm(32) })],
+        ["a FLAC file", bytes("fLaC", pcm(100))],
+    ])("rejects %s with first_channel as it does by default", async (_, recording) => {
+        const byDefault = await iterationError(iterAudioChunks(recording, { maxChunkMs: 1000 }));
+
+        const error = await iterationError(
+            iterAudioChunks(recording, { maxChunkMs: 1000, downmixStrategy: "first_channel" }),
+        );
+
+        expectError(error, UnsupportedAudioError, byDefault.message);
     });
 
     it("rejects audio that is neither MP3 nor WAV", async () => {

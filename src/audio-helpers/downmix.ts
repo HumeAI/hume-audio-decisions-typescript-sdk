@@ -4,13 +4,17 @@ import { abortRawResponse } from "../core/fetcher/RawResponse.js";
 import { DecisionsError } from "../errors/DecisionsError.js";
 import { dataView } from "./bytes.js";
 import { checkChoice } from "./checks.js";
+import { UnsupportedAudioError } from "./errors.js";
 import { ceilDiv, floorDiv } from "./integers.js";
-import { samplesWav, type WavAudio } from "./wav.js";
+import { isMp3, parseMp3 } from "./mp3.js";
+import { isWav, parseWav, samplesWav, type WavAudio, wavChannels } from "./wav.js";
 
 const STRATEGIES = ["mix", "first_channel", "none"] as const;
 
 /** How a WAV file is mixed down before it is sent: "mix", "first_channel", or "none" to send it as it is. */
 export type DownmixStrategy = (typeof STRATEGIES)[number];
+
+const FIRST_CHANNEL_COMMAND = 'ffmpeg -i input -af "pan=mono|c0=c0" output.wav';
 
 // The model hears audio at this rate, in one channel.
 const MODEL_SAMPLE_RATE = 16000;
@@ -44,6 +48,91 @@ export function checkDownmixStrategy(strategy: unknown = "mix"): DownmixStrategy
     return checkChoice("downmixStrategy", strategy, STRATEGIES);
 }
 
+interface Plan {
+    readonly sampleRate: number;
+    readonly count: number;
+    readonly converted: WavAudio;
+    /** Whether the first channel is copied exactly rather than converted. */
+    readonly copies: boolean;
+    /** Whether two channels are mixed into one rather than the first read alone. */
+    readonly mixes: boolean;
+}
+
+/** How `create` sends a file: as it is, or mixed down from the WAV samples the SDK reads. */
+type Sending = { readonly asIs: true } | { readonly asIs: false; readonly wav: WavAudio; readonly plan: Plan };
+
+/**
+ * Checks, without sending anything, that `create` can send `data` as `strategy` asks.
+ *
+ * The SDK cannot take a channel out of an MP3 file, a WAV file it cannot read, or a file of any other
+ * format, and sends such a file as it is. So with "first_channel", `create` rejects such a file unless
+ * it can tell the file has only one channel: an MP3 file whose audio frames are all mono, or a WAV
+ * file whose header states one channel. `createChunked` and `iterAudioChunks` reject an MP3 file the
+ * same way, and reject a WAV file they cannot read, or a file of another format, under every strategy.
+ *
+ * @throws {RangeError} If `strategy` is not "mix", "first_channel" or "none".
+ * @throws {UnsupportedAudioError} If `create` would reject the file, sending nothing.
+ *
+ * @example
+ * import { checkDownmix } from "@humeai/audio-decisions/audio-helpers";
+ *
+ * checkDownmix(data, "first_channel");
+ */
+export function checkDownmix(data: Uint8Array, strategy?: DownmixStrategy): void {
+    sendingOf(data, checkDownmixStrategy(strategy));
+}
+
+/** Throws as `checkDownmix` describes. */
+export function sendingOf(data: Uint8Array, strategy: DownmixStrategy): Sending {
+    if (isWav(data)) {
+        let wav: WavAudio;
+        try {
+            wav = parseWav(data);
+        } catch {
+            // A WAV file this parser cannot read may still be one the API can decode, so it is left to
+            // the API.
+            return asItIs(strategy, "WAV file the SDK cannot read", () => wavChannels(data));
+        }
+        const plan = planDownmix(wav, strategy);
+        return plan === undefined ? { asIs: true } : { asIs: false, wav, plan };
+    }
+    if (isMp3(data)) {
+        return asItIs(strategy, "MP3 file", () => mp3Channels(data));
+    }
+    return asItIs(strategy, "file that is neither WAV nor MP3", () => undefined);
+}
+
+/** The error for a file "first_channel" cannot apply to, since the SDK would send it as it is. */
+export function firstChannelUnsupported(kind: string, channels: number | undefined): UnsupportedAudioError {
+    const file = channels === undefined ? kind : `${channels}-channel ${kind}`;
+    return new UnsupportedAudioError(
+        `downmixStrategy "first_channel" cannot keep only the first channel of this ${file}, since its audio` +
+            ` would be sent as it is. Take the first channel out first, for example with: ${FIRST_CHANNEL_COMMAND}`,
+    );
+}
+
+// The channels are read only for "first_channel", since reading an MP3 file's channels scans every frame.
+function asItIs(strategy: DownmixStrategy, kind: string, channelsOf: () => number | undefined): Sending {
+    if (strategy === "first_channel") {
+        const channels = channelsOf();
+        if (channels !== 1) {
+            throw firstChannelUnsupported(kind, channels);
+        }
+    }
+    return { asIs: true };
+}
+
+function mp3Channels(data: Uint8Array): number | undefined {
+    let channels: number;
+    try {
+        channels = parseMp3(data).channels;
+    } catch {
+        return undefined;
+    }
+    // A file without audio frames states no channels.
+    return channels === 0 ? undefined : channels;
+}
+
 /**
  * The samples of `wav` mixed down by `strategy` into one channel, with a description of them, or
  * undefined when the file is best sent as it is: the API would mix it the same way and converting it
@@ -56,6 +145,42 @@ export async function downmixWav(
     strategy: DownmixStrategy,
     signal?: AbortSignal,
 ): Promise<Downmixed | undefined> {
+    const plan = planDownmix(wav, strategy);
+    return plan === undefined ? undefined : mixDown(data, wav, plan, signal);
+}
+
+/** Rejects with a DecisionsError once `signal` aborts. */
+export async function mixDown(
+    data: Uint8Array,
+    wav: WavAudio,
+    { sampleRate, count, converted, copies, mixes }: Plan,
+    signal?: AbortSignal,
+): Promise<Downmixed> {
+    if (copies) {
+        const picked = new Uint8Array(wav.sampleCount * wav.sampleWidth);
+        await paced(copyFirstChannel(data, wav, picked), signal);
+        const { sampleWidth, isFloat, sampleCount } = wav;
+        return {
+            data: picked,
+            wav: samplesWav({ channels: 1, sampleRate: wav.sampleRate, sampleWidth, isFloat, sampleCount }),
+        };
+    }
+    const read = monoReader(data, wav, mixes);
+    const out = new Uint8Array(count * converted.frameBytes);
+    const view = dataView(out);
+    // Integer samples are scaled to the range -1 to 1, as ffmpeg does.
+    const fullScale = wav.isFloat ? 1 : 2 ** (wav.sampleWidth * 8 - 1);
+    const write: Write = (output, value) => view.setFloat32(output * 4, value / fullScale, true);
+    await paced(
+        sampleRate === wav.sampleRate
+            ? copySamples(read, write, count)
+            : resample(read, write, wav.sampleCount, wav.sampleRate, sampleRate, count),
+        signal,
+    );
+    return { data: out, wav: converted };
+}
+
+function planDownmix(wav: WavAudio, strategy: DownmixStrategy): Plan | undefined {
     // ffmpeg weighs channels by the speakers in the header's channel mask and leaves out the LFE
     // channel, and it refuses some two-channel masks, so only audio it mixes by adding the channels at
     // equal weight is mixed here. Anything else is sent as it is for the API to mix.
@@ -76,28 +201,13 @@ export async function downmixWav(
         return undefined;
     }
     // A copy of the channel's samples is exact, so it is preferred whenever it is no larger.
-    if (picksChannel && copyBytes <= convertedBytes) {
-        const picked = new Uint8Array(copyBytes);
-        await paced(copyFirstChannel(data, wav, picked), signal);
-        const { sampleWidth, isFloat, sampleCount } = wav;
-        return {
-            data: picked,
-            wav: samplesWav({ channels: 1, sampleRate: wav.sampleRate, sampleWidth, isFloat, sampleCount }),
-        };
-    }
-    const read = monoReader(data, wav, strategy === "mix" && wav.channels === 2);
-    const out = new Uint8Array(convertedBytes);
-    const view = dataView(out);
-    // Integer samples are scaled to the range -1 to 1, as ffmpeg does.
-    const fullScale = wav.isFloat ? 1 : 2 ** (wav.sampleWidth * 8 - 1);
-    const write: Write = (output, value) => view.setFloat32(output * 4, value / fullScale, true);
-    await paced(
-        sampleRate === wav.sampleRate
-            ? copySamples(read, write, count)
-            : resample(read, write, wav.sampleCount, wav.sampleRate, sampleRate, count),
-        signal,
-    );
-    return { data: out, wav: converted };
+    return {
+        sampleRate,
+        count,
+        converted,
+        copies: picksChannel && copyBytes <= convertedBytes,
+        mixes: strategy === "mix" && wav.channels === 2,
+    };
 }
 
 function mixesEvenly({ channels, channelMask }: WavAudio): boolean {

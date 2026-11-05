@@ -2,7 +2,7 @@
 
 import type { Uploadable } from "../core/file/index.js";
 import { checkChoice, checkInteger } from "./checks.js";
-import { checkDownmixStrategy, type DownmixStrategy, downmixWav } from "./downmix.js";
+import { checkDownmixStrategy, type DownmixStrategy, downmixWav, firstChannelUnsupported } from "./downmix.js";
 import { UnsupportedAudioError } from "./errors.js";
 import { checkFile, readFile } from "./files.js";
 import { ceilDiv, floorDiv, roundDiv } from "./integers.js";
@@ -77,7 +77,8 @@ export declare namespace iterAudioChunks {
          *    hears only that channel. The channel is copied exactly in the recording's sample format
          *    when that is no larger than resampling it, as it is at 16 kHz or below for every sample
          *    format but 64-bit floating point. Use it when that channel holds the speaker to judge.
-         *    Mono audio is treated as by "mix".
+         *    Mono audio is treated as by "mix". An MP3 file is cut as it is, so an MP3 file with more
+         *    than one channel is rejected.
          * 3. "none" cuts the audio as it is.
          */
         downmixStrategy?: DownmixStrategy;
@@ -176,7 +177,8 @@ type Cut = [start: number, end: number];
  * fit the API's size limit, or too short for an MP3 chunk to hold a new frame and the frames it
  * needs.
  * @throws {UnsupportedAudioError} From iteration, if the recording is empty or not a file this helper supports, such
- * as a compressed WAV or RF64 file. Any damage to an MP3 file is found before the first chunk, so no
+ * as a compressed WAV or RF64 file, or if `downmixStrategy` is "first_channel" and the recording is
+ * an MP3 file with a frame of two channels. Any damage to an MP3 file is found before the first chunk, so no
  * chunk is produced from a file that cannot be read to the end.
  *
  * @example
@@ -249,7 +251,11 @@ async function planAudioChunks(
         return wavChunks(mixed.data, mixed.wav, options);
     }
     if (isMp3(data)) {
-        return mp3Chunks(data, parseMp3(data), options);
+        const mp3 = parseMp3(data);
+        if (options.downmixStrategy === "first_channel" && mp3.channels > 1) {
+            throw firstChannelUnsupported("MP3 file", mp3.channels);
+        }
+        return mp3Chunks(data, mp3, options);
     }
     throw new UnsupportedAudioError("Unsupported audio format. Only MP3 and WAV files can be split into chunks.");
 }

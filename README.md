@@ -45,7 +45,7 @@ The model hears audio at 16 kHz in one channel: the API resamples every file and
 2. `"first_channel"` keeps only the first channel of a file with more than one. The channel is copied exactly in the file's own sample format when that is no larger than resampling it, as it is at 16 kHz or below for every sample format but 64-bit floating point, and is otherwise converted the same way as by `"mix"`. Use it to judge one speaker of a call who is on the first channel; for any other channel, send that channel as its own file.
 3. `"none"` sends the file as it is.
 
-MP3 files and WAV files the SDK cannot read, such as compressed WAV, are always sent as they are. Unless `downmixStrategy` is `"none"`, `create` reads the whole file into memory before sending it.
+The SDK cannot take a channel out of MP3 files, WAV files it cannot read, such as compressed WAV, or files of other formats, so it sends them as they are. With `"first_channel"`, it rejects such a file with an `UnsupportedAudioError`, sending nothing, unless it can tell the file has only one channel. `checkDownmix` from `@humeai/audio-decisions/audio-helpers` throws the same error without sending anything, so a file can be checked before it is sent. Unless `downmixStrategy` is `"none"`, `create` reads the whole file into memory before sending it.
 
 ## Quickstart
 
