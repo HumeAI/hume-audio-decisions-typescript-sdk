@@ -125,7 +125,9 @@ function asItIs(strategy: DownmixStrategy, kind: string, channelsOf: () => numbe
 function mp3Channels(data: Uint8Array): number | undefined {
     let channels: number;
     try {
-        channels = parseMp3(data).channels;
+        const mp3 = parseMp3(data);
+        // The whole file is sent, so audio that chunks would leave out reaches the API too.
+        channels = Math.max(mp3.channels, mp3.trailingChannels);
     } catch {
         return undefined;
     }
