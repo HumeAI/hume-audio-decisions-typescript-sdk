@@ -65,8 +65,8 @@ export function normalizeClientOptions<T extends BaseClientOptions = BaseClientO
         {
             "X-Fern-Language": "JavaScript",
             "X-Fern-SDK-Name": "@humeai/audio-decisions",
-            "X-Fern-SDK-Version": "0.2.0",
-            "User-Agent": "@humeai/audio-decisions/0.2.0",
+            "X-Fern-SDK-Version": "0.3.0",
+            "User-Agent": "@humeai/audio-decisions/0.3.0",
             "X-Fern-Runtime": core.RUNTIME.type,
             "X-Fern-Runtime-Version": core.RUNTIME.version,
         },

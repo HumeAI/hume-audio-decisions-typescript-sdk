@@ -77,7 +77,7 @@ Some of the SDK is written by hand rather than generated:
 1. `src/audio-helpers`, `tests/audio-helpers`, `README.md`, `LICENSE` and this file, which are listed in `.fernignore`.
 2. These changes to generated files:
    1. The `./audio-helpers` entry in `exports` in `package.json`.
-   2. In `src/api/resources/decisions/client/Client.ts`, the `downmixStrategy` option of `create` and the `createChunked` and `iterCreateChunked` methods.
+   2. In `src/api/resources/decisions/client/Client.ts`, the `downmixStrategy` option of `create` and its `UnsupportedAudioError` line under `@throws`, and the `createChunked` and `iterCreateChunked` methods.
    3. The ffmpeg install step in the test job in `.github/workflows/ci.yml`.
    4. The publish job in `.github/workflows/ci.yml`.
 

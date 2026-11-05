@@ -27,6 +27,7 @@ const TRAILING_TAGS = ["TAG", "APETAGEX", "LYRICSBEGIN", "ID3"];
 interface Header {
     readonly version: number;
     readonly sampleRate: number;
+    readonly channels: number;
     readonly length: number;
     /**
      * Bytes from the start of the frame to its side information, which follows the header and an
@@ -46,6 +47,8 @@ const NO_HEADER_FRAME: HeaderFrame = { leadingSamples: 0, trailingSamples: 0, st
 
 export interface Mp3Audio {
     readonly sampleRate: number;
+    /** The most channels any audio frame has, since each frame states its own. 0 without frames. */
+    readonly channels: number;
     readonly samplesPerFrame: number;
     /** Where each frame starts, followed by where the last one ends. Frames are contiguous. */
     readonly offsets: readonly number[];
@@ -79,6 +82,7 @@ export function parseMp3(data: Uint8Array): Mp3Audio {
     const offsets: number[] = [];
     const reservoirBytes: number[] = [];
     const mainDataBytes: number[] = [];
+    let channels = 0;
     while (offset + 4 <= data.length && !startsTrailingTag(data, offset)) {
         const header = tryReadHeader(data, offset);
         if (typeof header === "string") {
@@ -96,6 +100,7 @@ export function parseMp3(data: Uint8Array): Mp3Audio {
         if (offset + header.length > data.length) {
             break;
         }
+        channels = Math.max(channels, header.channels);
         offsets.push(offset);
         reservoirBytes.push(readReservoirBytes(data, offset, header));
         mainDataBytes.push(header.length - header.sideInfoStart - header.sideInfoSize);
@@ -107,6 +112,7 @@ export function parseMp3(data: Uint8Array): Mp3Audio {
     const samplesPerFrame = first.version === MPEG1 ? 1152 : 576;
     return {
         sampleRate: first.sampleRate,
+        channels,
         samplesPerFrame,
         offsets,
         reservoirBytes,
@@ -226,7 +232,7 @@ function tryReadHeader(data: Uint8Array, offset: number): Header | string {
     if (length < sideInfoStart + sideInfoSize) {
         return `invalid frame header at byte ${offset}`;
     }
-    return { version, sampleRate, length, sideInfoStart, sideInfoSize };
+    return { version, sampleRate, channels: mono ? 1 : 2, length, sideInfoStart, sideInfoSize };
 }
 
 /**

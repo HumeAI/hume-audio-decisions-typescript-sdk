@@ -53,37 +53,60 @@ export function parseWav(data: Uint8Array): WavAudio {
     if (data.length < 12 || !hasBytes(data, 0, "RIFF") || !hasBytes(data, 8, "WAVE")) {
         throw unsupported("no RIFF WAVE header");
     }
-    const view = dataView(data);
-    const riffSize = view.getUint32(4, true);
-    let offset = 12;
+    const riffSize = dataView(data).getUint32(4, true);
     let format: Format | undefined;
-    for (;;) {
-        if (offset + 8 > data.length) {
-            throw unsupported("no data chunk");
-        }
-        const isData = hasBytes(data, offset, "data");
-        const isFmt = hasBytes(data, offset, "fmt ");
-        let size = view.getUint32(offset + 4, true);
-        offset += 8;
-        if (isData) {
+    for (const { offset, start, size } of riffChunks(data)) {
+        if (hasBytes(data, offset, "data")) {
             if (format === undefined) {
                 throw unsupported("the data chunk comes before the fmt chunk");
             }
-            const available = data.length - offset;
+            const available = data.length - start;
             // Writers such as libsndfile fill in the sizes only when they close the file, so a recording
             // that was never closed declares no audio in a RIFF chunk that ends before it. Any other file
             // that declares no audio has none, including one whose RIFF size is unknown, because chunks
             // such as metadata can follow the data.
-            const unclosed = size === 0 && 8 + riffSize <= offset;
+            const unclosed = size === 0 && 8 + riffSize <= start;
             // A file cut short is read as far as it goes, up to its last whole sample.
-            size = unclosed || size === UNKNOWN_SIZE ? available : Math.min(size, available);
-            return { ...format, dataStart: offset, sampleCount: Math.floor(size / format.frameBytes) };
+            const audioBytes = unclosed || size === UNKNOWN_SIZE ? available : Math.min(size, available);
+            return { ...format, dataStart: start, sampleCount: Math.floor(audioBytes / format.frameBytes) };
         }
-        if (isFmt) {
-            format = parseFormat(data.subarray(offset, offset + Math.min(size, EXTENSIBLE_FMT_BYTES)));
+        if (hasBytes(data, offset, "fmt ")) {
+            format = parseFormat(data.subarray(start, start + Math.min(size, EXTENSIBLE_FMT_BYTES)));
         }
+    }
+    throw unsupported("no data chunk");
+}
+
+/**
+ * The channels the fmt chunk of a WAV file states, read even from a file `parseWav` rejects, or
+ * undefined when it has no fmt chunk.
+ */
+export function wavChannels(data: Uint8Array): number | undefined {
+    for (const { offset, start, size } of riffChunks(data)) {
+        if (hasBytes(data, offset, "fmt ")) {
+            return size >= 4 && start + 4 <= data.length ? dataView(data).getUint16(start + 2, true) : undefined;
+        }
+    }
+    return undefined;
+}
+
+interface RiffChunk {
+    /** Where the chunk's ID starts. */
+    readonly offset: number;
+    /** Where the chunk's body starts. */
+    readonly start: number;
+    readonly size: number;
+}
+
+/** The chunks after the RIFF header, up to the last whole chunk header. */
+function* riffChunks(data: Uint8Array): Generator<RiffChunk> {
+    const view = dataView(data);
+    let offset = 12;
+    while (offset + 8 <= data.length) {
+        const size = view.getUint32(offset + 4, true);
+        yield { offset, start: offset + 8, size };
         // Chunks with an odd size are followed by a padding byte.
-        offset += size + (size % 2);
+        offset += 8 + size + (size % 2);
     }
 }
 

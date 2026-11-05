@@ -4,6 +4,7 @@ import * as Decisions from "../../src/api/index";
 import {
     ChunkedDecisionsResult,
     type ChunkResult,
+    checkDownmix,
     type DownmixStrategy,
     iterAudioChunks,
     UnsupportedAudioError,
@@ -12,11 +13,14 @@ import { DecisionsClient } from "../../src/Client";
 import { DecisionsError } from "../../src/errors/index";
 import {
     asset,
+    bytes,
     collect,
     expectBytes,
     expectError,
     iterationError,
+    mp3AudioFrames,
     pcm,
+    rawWav,
     rejection,
     samplesWav,
     thrownBy,
@@ -40,6 +44,21 @@ type Respond = (number: number) => Response;
 function wav(milliseconds: number, { sampleRate = 8000, channels = 1 } = {}): Uint8Array<ArrayBuffer> {
     return wavFile({ data: pcm(((sampleRate * milliseconds) / 1000) * 2 * channels), sampleRate, channels });
 }
+
+/** A WAV file of 8-bit μ-law samples, as phone systems record, which the SDK cannot read. */
+function mulawWav(channels: number): Uint8Array<ArrayBuffer> {
+    return rawWav({ tag: 0x0007, sampleRate: 8000, channels, bits: 8, data: pcm(8000 * channels) });
+}
+
+// tone_stereo_mpeg1_32k.mp3 is a 4-second 440 Hz tone in two channels, encoded with: ffmpeg -f lavfi
+// -i sine=frequency=440:sample_rate=32000:duration=4 -ac 2 -c:a libmp3lame -b:a 64k
+// -metadata title=test -write_id3v1 1 tone_stereo_mpeg1_32k.mp3
+const STEREO_MP3 = () => asset("tone_stereo_mpeg1_32k.mp3");
+const MONO_THEN_STEREO_MP3 = () =>
+    bytes(mp3AudioFrames(asset("tone_mpeg1_32k.mp3")), mp3AudioFrames(asset("tone_stereo_mpeg1_32k.mp3")));
+const STEREO_MULAW = () => mulawWav(2);
+const MONO_MULAW = () => mulawWav(1);
+const FLAC = () => bytes("fLaC", pcm(996));
 
 function json(status: number, body: unknown): Response {
     return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -664,6 +683,78 @@ describe("create", () => {
         new DataView(audio.buffer).setUint16(20, 2, true);
 
         expectBytes([await uploaded(audio)], [audio]);
+    });
+
+    it.each<[string, () => Uint8Array]>([
+        ["a stereo MP3 file", STEREO_MP3],
+        ["an MP3 file that turns from mono to stereo partway", MONO_THEN_STEREO_MP3],
+    ])("rejects first_channel for %s from every entry point, sending nothing", async (_, file) => {
+        const sent: Sent[] = [];
+        const audio = file();
+        const options = { maxChunkMs: 1000, downmixStrategy: "first_channel" } as const;
+
+        const errors = [
+            await rejection(
+                decisions(sent).create({ request: REQUEST, file: audio, downmixStrategy: "first_channel" }),
+            ),
+            await iterationError(decisions(sent).iterCreateChunked({ request: REQUEST, file: audio, ...options })),
+            await iterationError(iterAudioChunks(audio, options)),
+            thrownBy(() => checkDownmix(audio, "first_channel")),
+        ];
+
+        for (const error of errors) {
+            expectError(error, UnsupportedAudioError, "cannot keep only the first channel of this 2-channel MP3 file");
+            expect(error.message).toContain("pan=mono|c0=c0");
+        }
+        expect(sent).toEqual([]);
+    });
+
+    it.each<[string, () => Uint8Array, string]>([
+        ["a stereo μ-law WAV file", STEREO_MULAW, "2-channel WAV file the SDK cannot read"],
+        ["a FLAC file", FLAC, "file that is neither WAV nor MP3"],
+    ])("rejects first_channel for %s, which create would send as it is, sending nothing", async (_, file, says) => {
+        const sent: Sent[] = [];
+        const audio = file();
+
+        const errors = [
+            await rejection(
+                decisions(sent).create({ request: REQUEST, file: audio, downmixStrategy: "first_channel" }),
+            ),
+            thrownBy(() => checkDownmix(audio, "first_channel")),
+        ];
+
+        for (const error of errors) {
+            expectError(error, UnsupportedAudioError, `cannot keep only the first channel of this ${says}`);
+        }
+        expect(sent).toEqual([]);
+    });
+
+    it.each<[string, () => Uint8Array]>([
+        ["a mono μ-law WAV file", MONO_MULAW],
+        ["a mono MP3 file", () => asset("tone_mpeg1_32k.mp3")],
+    ])("sends %s as it is under first_channel, since it has one channel", async (_, file) => {
+        const audio = file();
+
+        expect(() => checkDownmix(audio, "first_channel")).not.toThrow();
+        expectBytes([await uploaded(audio, "first_channel")], [audio]);
+    });
+
+    describe.each<[string, DownmixStrategy | undefined]>([
+        ["by default", undefined],
+        ["with downmixStrategy none", "none"],
+    ])("%s", (_, downmixStrategy) => {
+        it.each<[string, () => Uint8Array]>([
+            ["a stereo MP3 file", STEREO_MP3],
+            ["an MP3 file that turns from mono to stereo partway", MONO_THEN_STEREO_MP3],
+            ["a stereo μ-law WAV file", STEREO_MULAW],
+            ["a mono μ-law WAV file", MONO_MULAW],
+            ["a FLAC file", FLAC],
+        ])("sends %s unchanged", async (_, file) => {
+            const audio = file();
+
+            expect(() => checkDownmix(audio, downmixStrategy)).not.toThrow();
+            expectBytes([await uploaded(audio, downmixStrategy)], [audio]);
+        });
     });
 
     it("rejects a file given as a string, pointing to { path }, sending nothing", async () => {

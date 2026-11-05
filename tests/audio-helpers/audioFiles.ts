@@ -136,6 +136,93 @@ export function wavFile({
     return bytes("RIFF", uint32(body.length), body);
 }
 
+// MPEG-1 layer III bitrates in kbit/s and sample rates, by their index in a frame header.
+const MPEG1_BITRATES = [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320];
+const MPEG1_SAMPLE_RATES = [44100, 48000, 32000];
+
+/**
+ * The audio frames of an MPEG-1 layer III file as ffmpeg writes it, without its ID3 tags or the Info
+ * frame before the audio. It is read here rather than by the SDK, so the files built from it do not
+ * change with the code under test.
+ */
+export function mp3AudioFrames(file: Uint8Array): Uint8Array<ArrayBuffer> {
+    let start = 0;
+    if (hasText(file, 0, "ID3")) {
+        const footer = file[5] & 0x10 ? 10 : 0;
+        start = 10 + ((file[6] << 21) | (file[7] << 14) | (file[8] << 7) | file[9]) + footer;
+    }
+    // The Info tag follows the side information, which is 17 bytes for mono and 32 otherwise.
+    const sideInfoBytes = file[start + 3] >> 6 === 3 ? 17 : 32;
+    if (hasText(file, start + 4 + sideInfoBytes, "Info") || hasText(file, start + 4 + sideInfoBytes, "Xing")) {
+        const b2 = file[start + 2];
+        const bitrate = MPEG1_BITRATES[b2 >> 4];
+        start += Math.floor((144000 * bitrate) / MPEG1_SAMPLE_RATES[(b2 >> 2) & 3]) + ((b2 >> 1) & 1);
+    }
+    const end = hasText(file, file.length - 128, "TAG") ? file.length - 128 : file.length;
+    return file.slice(start, end);
+}
+
+function hasText(data: Uint8Array, offset: number, text: string): boolean {
+    return String.fromCharCode(...data.subarray(offset, offset + text.length)) === text;
+}
+
+/** A WAV file built field by field, so a test can give it a header the SDK cannot read. */
+export function rawWav({
+    tag = 0x0001,
+    sampleRate = 16000,
+    channels = 1,
+    bits = 16,
+    data,
+    extensible = false,
+    dataSize,
+    afterData = new Uint8Array(0),
+    blockAlign = channels * ((bits + 7) >> 3),
+    riffSize,
+    riffId = "RIFF",
+}: {
+    tag?: number;
+    sampleRate?: number;
+    channels?: number;
+    bits?: number;
+    data: Uint8Array;
+    extensible?: boolean;
+    dataSize?: number;
+    afterData?: Uint8Array;
+    blockAlign?: number;
+    riffSize?: number;
+    riffId?: string;
+}): Uint8Array<ArrayBuffer> {
+    let fmt = bytes(
+        uint16(extensible ? 0xfffe : tag),
+        uint16(channels),
+        uint32(sampleRate),
+        uint32(0),
+        uint16(blockAlign),
+        uint16(bits),
+    );
+    if (extensible) {
+        const subformat = bytes(uint16(tag), SUBFORMAT_GUID_SUFFIX);
+        fmt = bytes(fmt, uint16(22), uint16(bits), uint32(0), subformat);
+    }
+    // An odd-sized chunk before the data exercises the padding byte that follows it.
+    const info = bytes("INFOISFT", uint32(5), "Lavf", [0]);
+    const body = bytes(
+        "WAVE",
+        "fmt ",
+        uint32(fmt.length),
+        fmt,
+        "LIST",
+        uint32(info.length),
+        info,
+        [0],
+        "data",
+        uint32(dataSize ?? data.length),
+        data,
+        afterData,
+    );
+    return bytes(riffId, uint32(riffSize ?? body.length), body);
+}
+
 /**
  * A WAV file holding `samples`, interleaved with `channels` samples to a frame and scaled to -1 to 1.
  */

@@ -56,6 +56,7 @@ export class DecisionsClient {
      * @throws {@link Decisions.ServiceUnavailableError}
      * @throws {@link errors.DecisionsError}
      * @throws {@link errors.DecisionsTimeoutError}
+     * @throws {UnsupportedAudioError} If `downmixStrategy` is "first_channel" and the file is one the SDK sends as it is: an MP3 file, a WAV file it cannot read, or a file of another format. A file the SDK can tell has only one channel is sent instead. Nothing has been sent when this is thrown.
      *
      * @example
      *     import { createReadStream } from "fs";
@@ -563,7 +564,7 @@ export class DecisionsClient {
      *
      * @throws {TypeError} From this call, if `maxChunkMs`, `startMs` or `endMs` is not a safe integer, or `file` is a string.
      * @throws {RangeError} From this call, if an option is out of range, and from iteration, if the recording cannot be split as requested. Nothing has been sent when either is thrown.
-     * @throws {UnsupportedAudioError} From iteration, if the recording is empty or not a file `iterAudioChunks` supports.
+     * @throws {UnsupportedAudioError} From iteration, if the recording is empty or not a file `iterAudioChunks` supports, or if `downmixStrategy` is "first_channel" and the recording is an MP3 file with a frame of two channels. Nothing has been sent.
      * @throws {@link errors.DecisionsError} From iteration, if `requestOptions.abortSignal` aborts.
      *
      * @example
@@ -604,7 +605,7 @@ export class DecisionsClient {
      *
      * @throws {TypeError} If `maxChunkMs`, `startMs` or `endMs` is not a safe integer, or `file` is a string. Nothing has been sent.
      * @throws {RangeError} If an option is out of range or the recording cannot be split as requested. Nothing has been sent.
-     * @throws {UnsupportedAudioError} If the recording is empty or not a file `iterAudioChunks` supports.
+     * @throws {UnsupportedAudioError} If the recording is empty or not a file `iterAudioChunks` supports, or if `downmixStrategy` is "first_channel" and the recording is an MP3 file with a frame of two channels. Nothing has been sent.
      * @throws {@link errors.DecisionsError} If `requestOptions.abortSignal` aborts.
      *
      * @example
