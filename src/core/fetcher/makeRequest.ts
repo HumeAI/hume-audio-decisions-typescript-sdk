@@ -76,6 +76,10 @@ export const makeRequest = async (
             body: requestBody,
             signal: newSignals,
             credentials: withCredentials ? "include" : undefined,
+            // A followed redirect would send the API key header, and on a 307 or 308 the request body, to wherever
+            // it points, since fetch drops only standard credential headers such as Authorization when a redirect
+            // leaves the origin.
+            redirect: "manual",
             // @ts-ignore
             duplex,
             ...(disableCache && isCacheNoStoreSupported() ? { cache: "no-store" as RequestCache } : {}),

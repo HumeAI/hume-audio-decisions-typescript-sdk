@@ -74,14 +74,16 @@ The following directories contain generated code:
 
 Some of the SDK is written by hand rather than generated:
 
-1. `src/audio-helpers`, `tests/audio-helpers`, `README.md`, `LICENSE` and this file, which are listed in `.fernignore`.
+1. `src/audio-helpers`, `tests/audio-helpers`, `tests/responses.test.ts`, `README.md`, `LICENSE` and this file, which are listed in `.fernignore`.
 2. These changes to generated files:
    1. The `./audio-helpers` entry in `exports` in `package.json`.
    2. In `src/api/resources/decisions/client/Client.ts`, the `downmixStrategy` option of `create` and its `UnsupportedAudioError` line under `@throws`, and the `createChunked` and `iterCreateChunked` methods.
    3. The ffmpeg install step in the test job in `.github/workflows/ci.yml`.
    4. The publish job in `.github/workflows/ci.yml`.
+   5. In `src/core/fetcher/makeRequest.ts`, `redirect: "manual"`, so that a redirect is never followed.
+   6. In `src/core/fetcher/Fetcher.ts`, only a `2xx` status is a success, and a body that is not a JSON object is reported as `non-json` with its raw text, whatever the status. This relies on every endpoint answering with a JSON object. It also edits the tests of these responses in `tests/unit/fetcher/Fetcher.test.ts` and `tests/unit/fetcher/logging.test.ts`.
 
-Regeneration rewrites the generated files. Fern Replay applies the committed changes to them again and records them in `.fern/replay.lock`, but check each regeneration for them. The tests in `tests/audio-helpers` fail if the `exports` entry, the changes to `Client.ts` or the ffmpeg step is missing, while nothing fails if the publish job is lost.
+Regeneration rewrites the generated files. Fern Replay applies the committed changes to them again and records them in `.fern/replay.lock`, but check each regeneration for them. The tests in `tests/audio-helpers` fail if the `exports` entry, the changes to `Client.ts` or the ffmpeg step is missing, and `tests/responses.test.ts` fails if a change to the fetcher is, while nothing fails if the publish job is lost.
 
 ### Merging Pull Requests
 

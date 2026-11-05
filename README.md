@@ -399,6 +399,10 @@ try {
 }
 ```
 
+The API answers every request with a JSON object. A response whose body is anything else, such as a proxy's page or a plain-text `500`, rejects with the base `DecisionsError`, not a subclass such as `InternalServerError`, and its `body` is the raw text, even when its status is a success. Such a `2xx` may still have been processed and billed.
+
+The client never follows a redirect, since following it would send your API key and the request to another address. A `3xx` status rejects with a `DecisionsError`, and `rawResponse.headers` holds its `location`. In a browser, `fetch` hides a redirect's status and headers, so `statusCode` is `0`. `client.fetch` resolves with a redirect's response as it is.
+
 The client retries a request that fails with a 408, 429, or 5xx status up to 2 times, waiting as long as the response's `Retry-After` header asks when it has one. Pass `maxRetries` to the client, or in the request options for one request, to change the limit. Requests time out after 60 seconds unless you pass a different `timeoutInSeconds` the same way.
 
 [Errors](https://dev.hume.ai/audio-decisions/docs/errors) lists every code and whether to retry.
