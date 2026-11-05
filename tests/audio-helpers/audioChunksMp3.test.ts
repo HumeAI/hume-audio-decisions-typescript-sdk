@@ -6,7 +6,7 @@ import {
     iterAudioChunks,
     UnsupportedAudioError,
 } from "../../src/audio-helpers/index";
-import { asset, bytes, collect, expectBytes, expectError, iterationError, times } from "./audioFiles";
+import { asset, bytes, collect, expectBytes, expectError, id3v2, iterationError, times, uint32 } from "./audioFiles";
 
 const MPEG1 = 3;
 const MPEG2 = 2;
@@ -66,10 +66,12 @@ function frames(count: number, options: FrameOptions = {}): Uint8Array[] {
     return Array.from({ length: count }, (_, number) => frame(number, options));
 }
 
-function id3v2(size: number, { footer = false }: { footer?: boolean } = {}): Uint8Array {
-    const syncsafe = [(size >> 21) & 0x7f, (size >> 14) & 0x7f, (size >> 7) & 0x7f, size & 0x7f];
-    const tag = bytes("ID3", [4, 0, footer ? 0x10 : 0], syncsafe, new Uint8Array(size));
-    return footer ? bytes(tag, "3DI", [4, 0, 0x10], syncsafe) : tag;
+/** Builds an APEv2 tag with a header and a footer around `items`. */
+function apeTag(items: Uint8Array): Uint8Array {
+    const size = items.length + 32;
+    const header = bytes("APETAGEX", uint32(2000), uint32(size), uint32(1), uint32(0xa0000000), new Uint8Array(8));
+    const footer = bytes("APETAGEX", uint32(2000), uint32(size), uint32(1), uint32(0x80000000), new Uint8Array(8));
+    return bytes(header, items, footer);
 }
 
 function vbrFrame(marker: string, offset: number, { mono = false }: { mono?: boolean } = {}): Uint8Array {
@@ -359,6 +361,28 @@ describe("iterAudioChunks with MP3 files", () => {
     it("rejects an MP3 whose frames continue after a tag, as in files joined end to end", async () => {
         const all = frames(10);
         const recording = bytes(concatFrames(all), "TAG", new Uint8Array(125), concatFrames(all));
+
+        const error = await iterationError(iterAudioChunks(recording, { maxChunkMs: 1000 }));
+
+        expectError(error, UnsupportedAudioError, "audio frames follow a tag at byte 4170");
+    });
+
+    // GEOB frames embed a file in an ID3v2 tag, and APE tags can hold binary items such as cover art.
+    it.each([
+        ["an ID3v2 tag", (contents: Uint8Array) => id3v2(contents)],
+        ["an APE tag", apeTag],
+    ])("reads an MP3 whose frames end at %s holding MP3 frames", async (_, tag) => {
+        const all = frames(10);
+        const recording = bytes(concatFrames(all), tag(concatFrames(frames(2))), "TAG", new Uint8Array(125));
+
+        const chunks = await collect(iterAudioChunks(recording, { maxChunkMs: 1000 }));
+
+        expect(chunks.map((c) => c.data)).toEqual([concatFrames(all)]);
+    });
+
+    it("rejects an MP3 whose frames continue after a tag holding MP3 frames", async () => {
+        const all = frames(10);
+        const recording = bytes(concatFrames(all), id3v2(concatFrames(frames(2))), concatFrames(all));
 
         const error = await iterationError(iterAudioChunks(recording, { maxChunkMs: 1000 }));
 

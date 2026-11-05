@@ -1,6 +1,6 @@
 // Maintained by hand and listed in .fernignore, so SDK regeneration leaves it in place.
 
-import { hasBytes, uint32BE } from "./bytes.js";
+import { dataView, hasBytes, uint32BE } from "./bytes.js";
 import { UnsupportedAudioError } from "./errors.js";
 
 const CONVERT_COMMAND = "ffmpeg -i input.mp3 -c:a libmp3lame -q:a 2 output.mp3";
@@ -23,6 +23,10 @@ const DECODER_DELAY = 529;
 const LAME_TAG_ENCODERS = ["LAME", "Lavf", "Lavc"];
 // Tags that some writers append after the last frame. Nothing after one is audio.
 const TRAILING_TAGS = ["TAG", "APETAGEX", "LYRICSBEGIN", "ID3"];
+const ID3V1_SIZE = 128;
+const APE_HEADER_SIZE = 32;
+// Set in the flags of an APE tag's header, which comes before the items, and clear in its footer.
+const APE_IS_HEADER = 0x20000000;
 
 interface Header {
     readonly version: number;
@@ -86,8 +90,9 @@ export function parseMp3(data: Uint8Array): Mp3Audio {
     while (offset + 4 <= data.length) {
         if (startsTrailingTag(data, offset)) {
             // Frames after a tag, as in files joined end to end, would be sent but never read here,
-            // so their channels and length would go unchecked.
-            if (framesFollow(data, offset + 1, first)) {
+            // so their channels and length would go unchecked. Tags can hold binary data, such as
+            // cover art or an embedded file, so the search starts after them.
+            if (framesFollow(data, skipTrailingTags(data, offset), first)) {
                 throw unsupported(`audio frames follow a tag at byte ${offset}`);
             }
             break;
@@ -184,16 +189,53 @@ function readReservoirBytes(data: Uint8Array, offset: number, header: Header): n
 
 function skipId3v2(data: Uint8Array): number {
     let offset = 0;
-    while (hasBytes(data, offset, "ID3") && offset + 10 <= data.length) {
-        const flags = data[offset + 5];
-        // ID3v2 sizes store 7 bits in each byte.
-        let size = 0;
-        for (let index = offset + 6; index < offset + 10; index++) {
-            size = (size << 7) | (data[index] & 0x7f);
-        }
-        offset += 10 + size + (flags & 0x10 ? 10 : 0);
+    let end = id3v2End(data, offset);
+    while (end !== undefined) {
+        offset = end;
+        end = id3v2End(data, offset);
     }
     return offset;
+}
+
+/** Where the ID3v2 tag at `offset` ends, which can be past the end of `data`. Undefined without one. */
+function id3v2End(data: Uint8Array, offset: number): number | undefined {
+    if (!hasBytes(data, offset, "ID3") || offset + 10 > data.length) {
+        return undefined;
+    }
+    const flags = data[offset + 5];
+    // ID3v2 sizes store 7 bits in each byte.
+    let size = 0;
+    for (let index = offset + 6; index < offset + 10; index++) {
+        size = (size << 7) | (data[index] & 0x7f);
+    }
+    return offset + 10 + size + (flags & 0x10 ? 10 : 0);
+}
+
+/**
+ * Where the tags that start at `offset` end. A tag whose size is not stated, as in a Lyrics3 tag, or
+ * that would run past the end of `data` is not skipped, so its bytes are searched for frames too.
+ */
+function skipTrailingTags(data: Uint8Array, offset: number): number {
+    let end = trailingTagEnd(data, offset);
+    while (end !== undefined && end <= data.length) {
+        offset = end;
+        end = trailingTagEnd(data, offset);
+    }
+    return offset;
+}
+
+function trailingTagEnd(data: Uint8Array, offset: number): number | undefined {
+    if (hasBytes(data, offset, "TAG")) {
+        return offset + ID3V1_SIZE;
+    }
+    if (hasBytes(data, offset, "APETAGEX") && offset + APE_HEADER_SIZE <= data.length) {
+        const view = dataView(data);
+        // The size counts the items and footer that follow a header, but not the header itself.
+        const size = view.getUint32(offset + 12, true);
+        const flags = view.getUint32(offset + 20, true);
+        return offset + APE_HEADER_SIZE + (flags & APE_IS_HEADER ? size : 0);
+    }
+    return id3v2End(data, offset);
 }
 
 function readHeader(data: Uint8Array, offset: number): Header {

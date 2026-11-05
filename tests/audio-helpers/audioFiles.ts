@@ -140,6 +140,15 @@ export function wavFile({
 const MPEG1_BITRATES = [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320];
 const MPEG1_SAMPLE_RATES = [44100, 48000, 32000];
 
+/** Builds an ID3v2.4 tag holding `contents`, or that many zero bytes. */
+export function id3v2(contents: Uint8Array | number, { footer = false }: { footer?: boolean } = {}): Uint8Array {
+    const body = typeof contents === "number" ? new Uint8Array(contents) : contents;
+    const size = body.length;
+    const syncsafe = [(size >> 21) & 0x7f, (size >> 14) & 0x7f, (size >> 7) & 0x7f, size & 0x7f];
+    const tag = bytes("ID3", [4, 0, footer ? 0x10 : 0], syncsafe, body);
+    return footer ? bytes(tag, "3DI", [4, 0, 0x10], syncsafe) : tag;
+}
+
 /**
  * The audio frames of an MPEG-1 layer III file as ffmpeg writes it, without its ID3 tags or the Info
  * frame before the audio. It is read here rather than by the SDK, so the files built from it do not
