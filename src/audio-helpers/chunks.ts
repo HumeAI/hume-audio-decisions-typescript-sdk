@@ -2,7 +2,7 @@
 
 import type { Uploadable } from "../core/file/index.js";
 import { checkChoice, checkInteger } from "./checks.js";
-import { checkDownmixStrategy, type DownmixStrategy, downmixWav, firstChannelUnsupported } from "./downmix.js";
+import { checkDownmixStrategy, checkSentAsIs, type DownmixStrategy, downmixWav } from "./downmix.js";
 import { UnsupportedAudioError } from "./errors.js";
 import { checkFile, readFile } from "./files.js";
 import { ceilDiv, floorDiv, roundDiv } from "./integers.js";
@@ -252,9 +252,7 @@ async function planAudioChunks(
     }
     if (isMp3(data)) {
         const mp3 = parseMp3(data);
-        if (options.downmixStrategy === "first_channel" && mp3.channels > 1) {
-            throw firstChannelUnsupported("MP3 file", mp3.channels);
-        }
+        checkSentAsIs(options.downmixStrategy, "MP3 file", () => mp3.channels);
         return mp3Chunks(data, mp3, options);
     }
     throw new UnsupportedAudioError("Unsupported audio format. Only MP3 and WAV files can be split into chunks.");
