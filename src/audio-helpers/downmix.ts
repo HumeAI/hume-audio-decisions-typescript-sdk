@@ -6,7 +6,7 @@ import { dataView } from "./bytes.js";
 import { checkChoice } from "./checks.js";
 import { UnsupportedAudioError } from "./errors.js";
 import { ceilDiv, floorDiv } from "./integers.js";
-import { isMp3, parseMp3 } from "./mp3.js";
+import { isMp3, type Mp3Audio, parseMp3 } from "./mp3.js";
 import { isWav, parseWav, samplesWav, type WavAudio, wavChannels } from "./wav.js";
 
 const STRATEGIES = ["mix", "first_channel", "none"] as const;
@@ -58,8 +58,10 @@ interface Plan {
     readonly mixes: boolean;
 }
 
-/** How `create` sends a file: as it is, or mixed down from the WAV samples the SDK reads. */
-type Sending = { readonly asIs: true } | { readonly asIs: false; readonly wav: WavAudio; readonly plan: Plan };
+/** How `create` sends a file: as bytes of the file, or mixed down from the WAV samples the SDK reads. */
+type Sending =
+    | { readonly mixesDown: false; readonly data: Uint8Array }
+    | { readonly mixesDown: true; readonly wav: WavAudio; readonly plan: Plan };
 
 /**
  * Checks, without sending anything, that `create` can send `data` as `strategy` asks.
@@ -67,7 +69,8 @@ type Sending = { readonly asIs: true } | { readonly asIs: false; readonly wav: W
  * The SDK cannot take a channel out of an MP3 file, a WAV file it cannot read, or a file of any other
  * format, and sends such a file as it is. So with "first_channel", `create` rejects such a file unless
  * it can tell the file has only one channel: an MP3 file whose audio frames are all mono, or a WAV
- * file whose header states one channel. `createChunked` and `iterAudioChunks` reject an MP3 file the
+ * file whose header states one channel. It sends a mono MP3 file only up to the end of its last whole
+ * frame, leaving out tags and any other bytes after it, since only the frames are known to be mono. `createChunked` and `iterAudioChunks` reject an MP3 file the
  * same way, and reject a WAV file they cannot read, or a file of another format, under every strategy.
  *
  * @throws {RangeError} If `strategy` is not "mix", "first_channel" or "none".
@@ -91,15 +94,15 @@ export function sendingOf(data: Uint8Array, strategy: DownmixStrategy): Sending 
         } catch {
             // A WAV file this parser cannot read may still be one the API can decode, so it is left to
             // the API.
-            return asItIs(strategy, "WAV file the SDK cannot read", () => wavChannels(data));
+            return asItIs(data, strategy, "WAV file the SDK cannot read", () => wavChannels(data));
         }
         const plan = planDownmix(wav, strategy);
-        return plan === undefined ? { asIs: true } : { asIs: false, wav, plan };
+        return plan === undefined ? { mixesDown: false, data } : { mixesDown: true, wav, plan };
     }
     if (isMp3(data)) {
-        return asItIs(strategy, "MP3 file", () => mp3Channels(data));
+        return mp3Sending(data, strategy);
     }
-    return asItIs(strategy, "file that is neither WAV nor MP3", () => undefined);
+    return asItIs(data, strategy, "file that is neither WAV nor MP3", () => undefined);
 }
 
 /** The error for a file "first_channel" cannot apply to, since the SDK would send it as it is. */
@@ -111,28 +114,43 @@ export function firstChannelUnsupported(kind: string, channels: number | undefin
     );
 }
 
-// The channels are read only for "first_channel", since reading an MP3 file's channels scans every frame.
-function asItIs(strategy: DownmixStrategy, kind: string, channelsOf: () => number | undefined): Sending {
+function asItIs(
+    data: Uint8Array,
+    strategy: DownmixStrategy,
+    kind: string,
+    channelsOf: () => number | undefined,
+): Sending {
     if (strategy === "first_channel") {
         const channels = channelsOf();
         if (channels !== 1) {
             throw firstChannelUnsupported(kind, channels);
         }
     }
-    return { asIs: true };
+    return { mixesDown: false, data };
 }
 
-function mp3Channels(data: Uint8Array): number | undefined {
-    let channels: number;
+// The file is parsed only for "first_channel", since parsing an MP3 file reads every frame.
+function mp3Sending(data: Uint8Array, strategy: DownmixStrategy): Sending {
+    if (strategy !== "first_channel") {
+        return { mixesDown: false, data };
+    }
+    const mp3 = tryParseMp3(data);
+    // A file without audio frames states no channels.
+    const channels = mp3 !== undefined && mp3.frameCount > 0 ? mp3.channels : undefined;
+    if (mp3 === undefined || channels !== 1) {
+        throw firstChannelUnsupported("MP3 file", channels);
+    }
+    // Bytes after the last whole frame can still hold audio a decoder would play, such as a stray
+    // stereo frame after padding, and telling that apart from a tag's contents is guesswork.
+    return { mixesDown: false, data: data.subarray(0, mp3.offsets[mp3.frameCount]) };
+}
+
+function tryParseMp3(data: Uint8Array): Mp3Audio | undefined {
     try {
-        const mp3 = parseMp3(data);
-        // The whole file is sent, so audio that chunks would leave out reaches the API too.
-        channels = Math.max(mp3.channels, mp3.trailingChannels);
+        return parseMp3(data);
     } catch {
         return undefined;
     }
-    // A file without audio frames states no channels.
-    return channels === 0 ? undefined : channels;
 }
 
 /**

@@ -12,6 +12,7 @@ import {
 import { DecisionsClient } from "../../src/Client";
 import { DecisionsError } from "../../src/errors/index";
 import {
+    apeTag,
     asset,
     bytes,
     collect,
@@ -26,6 +27,7 @@ import {
     samplesWav,
     thrownBy,
     times,
+    uint32,
     wavFile,
 } from "./audioFiles";
 
@@ -59,16 +61,35 @@ const MONO_THEN_STEREO_MP3 = () =>
     bytes(mp3AudioFrames(asset("tone_mpeg1_32k.mp3")), mp3AudioFrames(asset("tone_stereo_mpeg1_32k.mp3")));
 // The stereo tone's audio frames are 288 bytes each.
 const STEREO_MP3_FRAME = () => mp3AudioFrames(asset("tone_stereo_mpeg1_32k.mp3")).subarray(0, 288);
-// Files whose mono frames are followed by stereo audio that chunks leave out but a decoder may play.
-const MONO_THEN_CUT_STEREO_MP3 = () =>
-    bytes(mp3AudioFrames(asset("tone_mpeg1_32k.mp3")), STEREO_MP3_FRAME().subarray(0, 287));
-const MONO_THEN_PADDED_STEREO_MP3 = () => bytes(mp3AudioFrames(asset("tone_mpeg1_32k.mp3")), [0], STEREO_MP3_FRAME());
-const MONO_THEN_TAGGED_STEREO_MP3 = () => bytes(asset("tone_mpeg1_32k.mp3"), STEREO_MP3_FRAME());
+const MONO_MP3_FRAMES = () => mp3AudioFrames(asset("tone_mpeg1_32k.mp3"));
+// The mono tone's ID3v2 tag, Info frame and audio frames, without the ID3v1 tag that ends the file.
+const MONO_MP3_TO_LAST_FRAME = () => asset("tone_mpeg1_32k.mp3").subarray(0, -128);
+const MONO_MP3_ID3V1 = () => asset("tone_mpeg1_32k.mp3").subarray(-128);
+// Mono audio up to its last whole frame, then bytes that can hold stereo audio a decoder may play.
+const MONO_MP3_ENDINGS: [string, () => Uint8Array, () => Uint8Array][] = [
+    ["its ID3v1 tag", MONO_MP3_TO_LAST_FRAME, MONO_MP3_ID3V1],
+    ["a stereo frame cut short", MONO_MP3_FRAMES, () => STEREO_MP3_FRAME().subarray(0, 287)],
+    ["one stereo frame after padding", MONO_MP3_FRAMES, () => bytes([0], STEREO_MP3_FRAME())],
+    ["one stereo frame after its ID3v1 tag", MONO_MP3_TO_LAST_FRAME, () => bytes(MONO_MP3_ID3V1(), STEREO_MP3_FRAME())],
+    [
+        "a stereo file embedded in an ID3v2 tag",
+        MONO_MP3_TO_LAST_FRAME,
+        () => bytes(MONO_MP3_ID3V1(), id3v2(mp3AudioFrames(asset("tone_stereo_mpeg1_32k.mp3")))),
+    ],
+    [
+        "a stereo frame embedded in an ID3v2 tag after padding",
+        MONO_MP3_FRAMES,
+        () => bytes([0], id3v2(STEREO_MP3_FRAME())),
+    ],
+    [
+        "a stereo frame in an APE tag item, with no tag header",
+        MONO_MP3_FRAMES,
+        // An APE item starts with its value's size, its flags, here binary, and its key.
+        () => apeTag(bytes(uint32(288), uint32(2), "Cover Art (Front)", [0], STEREO_MP3_FRAME()), { header: false }),
+    ],
+];
 // Joined with its tags, so the mono file's ID3v1 tag comes before the stereo file's frames.
 const MONO_AND_STEREO_MP3 = () => bytes(asset("tone_mpeg1_32k.mp3"), asset("tone_stereo_mpeg1_32k.mp3"));
-// The stereo frames sit inside an ID3v2 tag, as in a GEOB frame, so players never decode them.
-const MONO_MP3_EMBEDDING_STEREO = () =>
-    bytes(asset("tone_mpeg1_32k.mp3"), id3v2(mp3AudioFrames(asset("tone_stereo_mpeg1_32k.mp3"))));
 const STEREO_MULAW = () => mulawWav(2);
 const MONO_MULAW = () => mulawWav(1);
 const FLAC = () => bytes("fLaC", pcm(996));
@@ -726,9 +747,6 @@ describe("create", () => {
         ["a stereo μ-law WAV file", STEREO_MULAW, "2-channel WAV file the SDK cannot read"],
         ["a FLAC file", FLAC, "file that is neither WAV nor MP3"],
         ["a mono MP3 file and a stereo one joined with their tags", MONO_AND_STEREO_MP3, "MP3 file,"],
-        ["a mono MP3 file whose last frame is stereo and cut short", MONO_THEN_CUT_STEREO_MP3, "2-channel MP3 file"],
-        ["a mono MP3 file with one stereo frame after padding", MONO_THEN_PADDED_STEREO_MP3, "2-channel MP3 file"],
-        ["a mono MP3 file with one stereo frame after its tag", MONO_THEN_TAGGED_STEREO_MP3, "2-channel MP3 file"],
     ])("rejects first_channel for %s, which create would send as it is, sending nothing", async (_, file, says) => {
         const sent: Sent[] = [];
         const audio = file();
@@ -746,30 +764,33 @@ describe("create", () => {
         expect(sent).toEqual([]);
     });
 
-    it.each<[string, () => Uint8Array]>([
-        ["whose last frame is stereo and cut short", MONO_THEN_CUT_STEREO_MP3],
-        ["with one stereo frame after padding", MONO_THEN_PADDED_STEREO_MP3],
-        ["with one stereo frame after its tag", MONO_THEN_TAGGED_STEREO_MP3],
-    ])("chunks a mono MP3 file %s under first_channel, leaving the stereo audio out", async (_, file) => {
-        const chunks = await collect(
-            iterAudioChunks(file(), { maxChunkMs: 300_000, downmixStrategy: "first_channel" }),
-        );
-
-        expectBytes(
-            chunks.map((chunk) => chunk.data),
-            [mp3AudioFrames(asset("tone_mpeg1_32k.mp3"))],
-        );
-    });
-
-    it.each<[string, () => Uint8Array]>([
-        ["a mono μ-law WAV file", MONO_MULAW],
-        ["a mono MP3 file", () => asset("tone_mpeg1_32k.mp3")],
-        ["a mono MP3 file with a stereo one embedded in a tag after its frames", MONO_MP3_EMBEDDING_STEREO],
-    ])("sends %s as it is under first_channel, since it has one channel", async (_, file) => {
-        const audio = file();
+    it("sends a mono μ-law WAV file as it is under first_channel, since it has one channel", async () => {
+        const audio = MONO_MULAW();
 
         expect(() => checkDownmix(audio, "first_channel")).not.toThrow();
         expectBytes([await uploaded(audio, "first_channel")], [audio]);
+    });
+
+    it.each(
+        MONO_MP3_ENDINGS,
+    )("sends a mono MP3 file ending in %s only up to its last whole frame under first_channel", async (_, kept, ending) => {
+        const audio = bytes(kept(), ending());
+
+        expect(() => checkDownmix(audio, "first_channel")).not.toThrow();
+        expectBytes([await uploaded(audio, "first_channel")], [kept()]);
+    });
+
+    it.each(
+        MONO_MP3_ENDINGS,
+    )("chunks a mono MP3 file ending in %s under first_channel, leaving out what follows its frames", async (_, kept, ending) => {
+        const audio = bytes(kept(), ending());
+
+        const chunks = await collect(iterAudioChunks(audio, { maxChunkMs: 300_000, downmixStrategy: "first_channel" }));
+
+        expectBytes(
+            chunks.map((chunk) => chunk.data),
+            [MONO_MP3_FRAMES()],
+        );
     });
 
     describe.each<[string, DownmixStrategy | undefined]>([
