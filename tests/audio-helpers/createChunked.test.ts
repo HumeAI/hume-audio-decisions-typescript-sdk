@@ -787,6 +787,13 @@ describe("create", () => {
         expectBytes([await uploaded(audio, "first_channel")], [audio]);
     });
 
+    it("sends a mono MP3 file with zero padding after its ID3v2 tag under first_channel", async () => {
+        const audio = bytes(id3v2(20), [0, 0, 0, 0], MONO_MP3_FRAMES());
+
+        expect(() => checkDownmix(audio, "first_channel")).not.toThrow();
+        expectBytes([await uploaded(audio, "first_channel")], [audio]);
+    });
+
     it.each(
         MONO_MP3_ENDINGS,
     )("sends a mono MP3 file ending in %s only up to its last whole frame under first_channel", async (_, kept, ending) => {
