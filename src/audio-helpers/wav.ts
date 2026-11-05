@@ -88,10 +88,14 @@ export function parseWav(data: Uint8Array): WavAudio {
 
 /**
  * The channels the first fmt chunk of a WAV file states, read even from a file `parseWav` rejects.
- * Undefined when it has no fmt chunk, or when its format is not one whose decoders take the channel
- * count from the header.
+ * Undefined when it is not a RIFF WAVE file, when it has no fmt chunk, or when its format is not one
+ * whose decoders take the channel count from the header.
  */
 export function wavChannels(data: Uint8Array): number | undefined {
+    // Other RIFF forms, such as AVI, can hold a fmt chunk that does not describe all of their audio.
+    if (!hasBytes(data, 8, "WAVE")) {
+        return undefined;
+    }
     for (const { offset, start, size } of riffChunks(data)) {
         if (hasBytes(data, offset, "fmt ")) {
             const body = data.subarray(start, start + Math.min(size, EXTENSIBLE_FMT_BYTES));

@@ -107,6 +107,11 @@ const MONO_MULAW = () => mulawWav(1);
 // ffmpeg decodes MP3 audio in a WAV file with the channels its frames state, whatever the header states.
 const STEREO_MP3_IN_MONO_WAV = () =>
     rawWav({ tag: 0x0055, sampleRate: 32000, channels: 1, bits: 0, data: mp3AudioFrames(STEREO_MP3()) });
+const MONO_FMT_IN_AVI = () => {
+    const file = rawWav({ data: pcm(1000) });
+    file.set(bytes("AVI "), 8);
+    return file;
+};
 const FLAC = () => bytes("fLaC", pcm(996));
 
 function json(status: number, body: unknown): Response {
@@ -765,6 +770,7 @@ describe("create", () => {
             STEREO_MP3_IN_MONO_WAV,
             "WAV file the SDK cannot read",
         ],
+        ["a RIFF file of another form with a mono fmt chunk", MONO_FMT_IN_AVI, "WAV file the SDK cannot read"],
         ["a FLAC file", FLAC, "file that is neither WAV nor MP3"],
     ])("rejects first_channel for %s, which create would send as it is, sending nothing", async (_, file, says) => {
         const sent: Sent[] = [];
