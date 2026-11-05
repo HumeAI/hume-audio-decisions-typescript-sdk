@@ -56,6 +56,8 @@ function mulawWav(channels: number): Uint8Array<ArrayBuffer> {
 const STEREO_MP3 = () => asset("tone_stereo_mpeg1_32k.mp3");
 const MONO_THEN_STEREO_MP3 = () =>
     bytes(mp3AudioFrames(asset("tone_mpeg1_32k.mp3")), mp3AudioFrames(asset("tone_stereo_mpeg1_32k.mp3")));
+// Joined with its tags, so the mono file's ID3v1 tag comes before the stereo file's frames.
+const MONO_AND_STEREO_MP3 = () => bytes(asset("tone_mpeg1_32k.mp3"), asset("tone_stereo_mpeg1_32k.mp3"));
 const STEREO_MULAW = () => mulawWav(2);
 const MONO_MULAW = () => mulawWav(1);
 const FLAC = () => bytes("fLaC", pcm(996));
@@ -712,6 +714,7 @@ describe("create", () => {
     it.each<[string, () => Uint8Array, string]>([
         ["a stereo μ-law WAV file", STEREO_MULAW, "2-channel WAV file the SDK cannot read"],
         ["a FLAC file", FLAC, "file that is neither WAV nor MP3"],
+        ["a mono MP3 file and a stereo one joined with their tags", MONO_AND_STEREO_MP3, "MP3 file,"],
     ])("rejects first_channel for %s, which create would send as it is, sending nothing", async (_, file, says) => {
         const sent: Sent[] = [];
         const audio = file();
