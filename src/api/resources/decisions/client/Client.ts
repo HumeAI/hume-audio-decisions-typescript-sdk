@@ -56,7 +56,7 @@ export class DecisionsClient {
      * @throws {@link Decisions.ServiceUnavailableError}
      * @throws {@link errors.DecisionsError}
      * @throws {@link errors.DecisionsTimeoutError}
-     * @throws {UnsupportedAudioError} If `downmixStrategy` is "first_channel" and the file is one the SDK sends as it is: an MP3 file, a WAV file it cannot read, or a file of another format. A file the SDK can tell has only one channel is sent instead. Nothing has been sent when this is thrown.
+     * @throws {UnsupportedAudioError} If `downmixStrategy` is "first_channel" and the file is one the SDK sends as it is: an MP3 file, a WAV file it cannot read, or a file of another format. A file the SDK can tell has only one channel is sent instead, and a mono MP3 file only up to the end of its last whole frame. Nothing has been sent when this is thrown.
      *
      * @example
      *     import { createReadStream } from "fs";

@@ -18,7 +18,8 @@ export interface DownmixOptions {
      * "none" sends it as it is. The SDK cannot take a channel out of MP3 files, WAV files it cannot
      * read, or files of other formats, so it sends them as they are, and "first_channel" rejects such
      * a file with an UnsupportedAudioError, sending nothing, unless it can tell the file has only one
-     * channel. `checkDownmix` in `@humeai/audio-decisions/audio-helpers` finds this before sending.
+     * channel. It then sends a mono MP3 file only up to the end of its last whole frame, leaving out
+     * tags and any other bytes after it. `checkDownmix` in `@humeai/audio-decisions/audio-helpers` finds this before sending.
      * Unless it is "none", `create` reads the whole file into memory before sending it, since it must
      * read the file to tell whether it is a WAV file. `iterAudioChunks` in `@humeai/audio-decisions/audio-helpers` describes each.
      */
@@ -65,8 +66,8 @@ async function downmixFile(
     signal: AbortSignal | undefined,
 ): Promise<Uint8Array> {
     const sending = sendingOf(data, strategy);
-    if (sending.asIs) {
-        return data;
+    if (!sending.mixesDown) {
+        return sending.data;
     }
     const mixed = await mixDown(data, sending.wav, sending.plan, signal);
     return wavChunk(mixed.data, mixed.wav, 0, mixed.wav.sampleCount);

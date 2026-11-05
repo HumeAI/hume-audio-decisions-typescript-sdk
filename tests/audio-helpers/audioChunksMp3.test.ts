@@ -6,7 +6,7 @@ import {
     iterAudioChunks,
     UnsupportedAudioError,
 } from "../../src/audio-helpers/index";
-import { asset, bytes, collect, expectBytes, expectError, id3v2, iterationError, times, uint32 } from "./audioFiles";
+import { apeTag, asset, bytes, collect, expectBytes, expectError, id3v2, iterationError, times } from "./audioFiles";
 
 const MPEG1 = 3;
 const MPEG2 = 2;
@@ -64,14 +64,6 @@ function frame(
 
 function frames(count: number, options: FrameOptions = {}): Uint8Array[] {
     return Array.from({ length: count }, (_, number) => frame(number, options));
-}
-
-/** Builds an APEv2 tag with a header and a footer around `items`. */
-function apeTag(items: Uint8Array): Uint8Array {
-    const size = items.length + 32;
-    const header = bytes("APETAGEX", uint32(2000), uint32(size), uint32(1), uint32(0xa0000000), new Uint8Array(8));
-    const footer = bytes("APETAGEX", uint32(2000), uint32(size), uint32(1), uint32(0x80000000), new Uint8Array(8));
-    return bytes(header, items, footer);
 }
 
 function vbrFrame(marker: string, offset: number, { mono = false }: { mono?: boolean } = {}): Uint8Array {
@@ -370,7 +362,7 @@ describe("iterAudioChunks with MP3 files", () => {
     // GEOB frames embed a file in an ID3v2 tag, and APE tags can hold binary items such as cover art.
     it.each([
         ["an ID3v2 tag", (contents: Uint8Array) => id3v2(contents)],
-        ["an APE tag", apeTag],
+        ["an APE tag", (contents: Uint8Array) => apeTag(contents)],
     ])("reads an MP3 whose frames end at %s holding MP3 frames", async (_, tag) => {
         const all = frames(10);
         const recording = bytes(concatFrames(all), tag(concatFrames(frames(2))), "TAG", new Uint8Array(125));

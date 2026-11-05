@@ -149,6 +149,16 @@ export function id3v2(contents: Uint8Array | number, { footer = false }: { foote
     return footer ? bytes(tag, "3DI", [4, 0, 0x10], syncsafe) : tag;
 }
 
+/** Builds an APEv2 tag holding `items`, with a footer and, unless `header` is false, a header. */
+export function apeTag(items: Uint8Array, { header = true }: { header?: boolean } = {}): Uint8Array {
+    const size = items.length + 32;
+    // Bit 31 states that the tag has a header, and bit 29 marks the header itself.
+    const fields = (flags: number) =>
+        bytes("APETAGEX", uint32(2000), uint32(size), uint32(1), uint32(flags), new Uint8Array(8));
+    const footer = fields(header ? 0x80000000 : 0);
+    return header ? bytes(fields(0xa0000000), items, footer) : bytes(items, footer);
+}
+
 /**
  * The audio frames of an MPEG-1 layer III file as ffmpeg writes it, without its ID3 tags or the Info
  * frame before the audio. It is read here rather than by the SDK, so the files built from it do not
