@@ -57,6 +57,12 @@ function mulawWav(channels: number): Uint8Array<ArrayBuffer> {
 const STEREO_MP3 = () => asset("tone_stereo_mpeg1_32k.mp3");
 const MONO_THEN_STEREO_MP3 = () =>
     bytes(mp3AudioFrames(asset("tone_mpeg1_32k.mp3")), mp3AudioFrames(asset("tone_stereo_mpeg1_32k.mp3")));
+// The stereo tone's first audio frame is 288 bytes, so the file ends partway through a stereo frame.
+const MONO_THEN_CUT_STEREO_MP3 = () =>
+    bytes(
+        mp3AudioFrames(asset("tone_mpeg1_32k.mp3")),
+        mp3AudioFrames(asset("tone_stereo_mpeg1_32k.mp3")).subarray(0, 287),
+    );
 // Joined with its tags, so the mono file's ID3v1 tag comes before the stereo file's frames.
 const MONO_AND_STEREO_MP3 = () => bytes(asset("tone_mpeg1_32k.mp3"), asset("tone_stereo_mpeg1_32k.mp3"));
 // The stereo frames sit inside an ID3v2 tag, as in a GEOB frame, so players never decode them.
@@ -694,6 +700,7 @@ describe("create", () => {
     it.each<[string, () => Uint8Array]>([
         ["a stereo MP3 file", STEREO_MP3],
         ["an MP3 file that turns from mono to stereo partway", MONO_THEN_STEREO_MP3],
+        ["an MP3 file whose last frame is stereo and cut short", MONO_THEN_CUT_STEREO_MP3],
     ])("rejects first_channel for %s from every entry point, sending nothing", async (_, file) => {
         const sent: Sent[] = [];
         const audio = file();

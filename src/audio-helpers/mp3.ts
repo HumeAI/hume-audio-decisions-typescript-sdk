@@ -51,7 +51,10 @@ const NO_HEADER_FRAME: HeaderFrame = { leadingSamples: 0, trailingSamples: 0, st
 
 export interface Mp3Audio {
     readonly sampleRate: number;
-    /** The most channels any audio frame has, since each frame states its own. 0 without frames. */
+    /**
+     * The most channels any audio frame has, since each frame states its own, counting a last frame
+     * cut short. 0 without frames.
+     */
     readonly channels: number;
     readonly samplesPerFrame: number;
     /** Where each frame starts, followed by where the last one ends. Frames are contiguous. */
@@ -109,11 +112,12 @@ export function parseMp3(data: Uint8Array): Mp3Audio {
         if (header.version !== first.version || header.sampleRate !== first.sampleRate) {
             throw unsupported(`the sample rate changes at byte ${offset}`);
         }
+        // A file sent whole still carries a frame cut short, so its channels count too.
+        channels = Math.max(channels, header.channels);
         // A file cut short is read up to its last whole frame.
         if (offset + header.length > data.length) {
             break;
         }
-        channels = Math.max(channels, header.channels);
         offsets.push(offset);
         reservoirBytes.push(readReservoirBytes(data, offset, header));
         mainDataBytes.push(header.length - header.sideInfoStart - header.sideInfoSize);
