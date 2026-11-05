@@ -2,7 +2,7 @@
 
 import type { DecisionsUpload } from "../api/resources/decisions/client/requests/DecisionsUpload.js";
 import { toMultipartDataPart, type Uploadable } from "../core/file/index.js";
-import { checkDownmixStrategy, type DownmixStrategy, mixDown, sendingOf } from "./downmix.js";
+import { checkDownmixStrategy, type DownmixStrategy, downmixWav, sendingOf } from "./downmix.js";
 import { wavChunk } from "./wav.js";
 
 interface ReadFile {
@@ -67,11 +67,8 @@ async function downmixFile(
     signal: AbortSignal | undefined,
 ): Promise<Uint8Array> {
     const sending = sendingOf(data, strategy);
-    if (!sending.mixesDown) {
-        return sending.data;
-    }
-    const mixed = await mixDown(data, sending.wav, sending.plan, signal);
-    return wavChunk(mixed.data, mixed.wav, 0, mixed.wav.sampleCount);
+    const mixed = sending.wav === undefined ? undefined : await downmixWav(sending.data, sending.wav, strategy, signal);
+    return mixed === undefined ? sending.data : wavChunk(mixed.data, mixed.wav, 0, mixed.wav.sampleCount);
 }
 
 async function readBytes(data: Uploadable.FileLike): Promise<Uint8Array> {

@@ -1,5 +1,6 @@
 import { fromJson, toJson } from "../json.js";
 import { createLogger, type LogConfig, type Logger } from "../logging/logger.js";
+import { isPlainObject } from "../schemas/utils/isPlainObject.js";
 import type { APIResponse } from "./APIResponse.js";
 import { createRequestUrl } from "./createRequestUrl.js";
 import type { EndpointMetadata } from "./EndpointMetadata.js";
@@ -160,9 +161,7 @@ async function readJsonObject(
 ): Promise<{ ok: true; body: object } | { ok: false; rawBody: string }> {
     const rawBody = await response.text();
     const body = parseJson(rawBody);
-    return typeof body === "object" && body != null && !Array.isArray(body)
-        ? { ok: true, body }
-        : { ok: false, rawBody };
+    return isPlainObject(body) ? { ok: true, body } : { ok: false, rawBody };
 }
 
 function parseJson(text: string): unknown {

@@ -5,7 +5,7 @@ import type { AddressInfo } from "node:net";
 import type * as Decisions from "../src/api/index";
 import { DecisionsClient } from "../src/Client";
 import { DecisionsError } from "../src/errors/index";
-import { samplesWav } from "./audio-helpers/audioFiles";
+import { rejection, samplesWav } from "./audio-helpers/audioFiles";
 
 interface Answer {
     readonly status: number;
@@ -60,11 +60,8 @@ const CALLS: readonly [string, (client: DecisionsClient) => Promise<unknown>][] 
     ["runs.get", (client) => client.runs.get({ runId: "019a1f3c-7d2e-7b41-9c58-2e6f4a1d8b03" })],
 ];
 
-async function rejection(call: Promise<unknown>): Promise<DecisionsError> {
-    const error = await call.then(
-        () => undefined,
-        (error: unknown) => error,
-    );
+async function decisionsError(call: Promise<unknown>): Promise<DecisionsError> {
+    const error = await rejection(call);
     expect(error).toBeInstanceOf(DecisionsError);
     return error as DecisionsError;
 }
@@ -103,7 +100,7 @@ describe.each(CALLS)("%s", (_name, call) => {
             body: "{}",
         });
 
-        const error = await rejection(call(client));
+        const error = await decisionsError(call(client));
 
         expect(error.statusCode).toBe(307);
         expect(error.rawResponse?.headers.get("location")).toBe(`${elsewhere.url}${api.paths[0]}`);
@@ -123,30 +120,23 @@ describe.each(CALLS)("%s", (_name, call) => {
             "a 429 whose body is a JSON array",
             { status: 429, headers: { "content-type": "application/json" }, body: "[]" },
         ],
-    ])("keeps the status and raw body of %s", async (_description, answer) => {
-        api.answer = () => answer;
-
-        const error = await rejection(call(client));
-
-        expect(error.statusCode).toBe(answer.status);
-        expect(error.body).toBe(answer.body);
-    });
-
-    it.each<[string, Answer]>([
-        ["null labelled as JSON", { status: 200, headers: { "content-type": "application/json" }, body: "null" }],
-        ["a JSON array", { status: 200, headers: { "content-type": "application/json" }, body: "[1, 2]" }],
-        ["a page without a content type", { status: 200, body: "<html>Welcome to the network</html>" }],
+        ["a 200 whose body is null", { status: 200, headers: { "content-type": "application/json" }, body: "null" }],
         [
-            "a page labelled as HTML",
+            "a 200 whose body is a JSON array",
+            { status: 200, headers: { "content-type": "application/json" }, body: "[1, 2]" },
+        ],
+        ["a 200 page without a content type", { status: 200, body: "<html>Welcome to the network</html>" }],
+        [
+            "a 200 page labelled as HTML",
             { status: 200, headers: { "content-type": "text/html" }, body: "<html>Sign in</html>" },
         ],
-        ["an empty body", { status: 200, headers: { "content-type": "application/json" }, body: "" }],
-    ])("rejects a success whose body is %s, with its status and raw body", async (_description, answer) => {
+        ["an empty 200", { status: 200, headers: { "content-type": "application/json" }, body: "" }],
+    ])("rejects %s with its status and raw body", async (_description, answer) => {
         api.answer = () => answer;
 
-        const error = await rejection(call(client));
+        const error = await decisionsError(call(client));
 
-        expect(error.statusCode).toBe(200);
+        expect(error.statusCode).toBe(answer.status);
         expect(error.body).toBe(answer.body);
     });
 });
