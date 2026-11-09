@@ -39,7 +39,7 @@ import type * as Decisions from "../../../../index.js";
  *     }
  */
 export interface InputTokensRequest {
-    /** The duration of the audio file the decisions request would send, in milliseconds. A duration under 5 seconds is rejected with `audio_too_short`, and one over 5 minutes with `audio_too_long`. */
+    /** The duration of the audio file the decisions request would send, in milliseconds. A duration under 1 second is rejected with `audio_too_short`, and one over 5 minutes with `audio_too_long`. */
     audioDurationMs: number;
     /** Background information the model considers alongside the audio, such as the setting or who is speaking. */
     context?: string;

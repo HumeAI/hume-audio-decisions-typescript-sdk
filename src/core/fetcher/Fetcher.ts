@@ -1,13 +1,13 @@
-import { fromJson, toJson } from "../json.js";
+import { toJson } from "../json.js";
 import { createLogger, type LogConfig, type Logger } from "../logging/logger.js";
-import { isPlainObject } from "../schemas/utils/isPlainObject.js";
 import type { APIResponse } from "./APIResponse.js";
 import { createRequestUrl } from "./createRequestUrl.js";
 import type { EndpointMetadata } from "./EndpointMetadata.js";
 import { EndpointSupplier } from "./EndpointSupplier.js";
+import { getErrorResponseBody } from "./getErrorResponseBody.js";
 import { getFetchFn } from "./getFetchFn.js";
 import { getRequestBody } from "./getRequestBody.js";
-import { getResponseBody } from "./getResponseBody.js";
+import { getResponseBody, isResponseBodyError } from "./getResponseBody.js";
 import { Headers } from "./Headers.js";
 import { clearResponseTimeout, makeRequest } from "./makeRequest.js";
 import { abortRawResponse, toRawResponse, unknownRawResponse } from "./RawResponse.js";
@@ -154,22 +154,9 @@ async function getHeaders(args: Fetcher.Args): Promise<Headers> {
     return newHeaders;
 }
 
-// Every endpoint of this API answers with a JSON object, so any other body, such as null, a proxy's page,
-// or a server's plain-text error, did not come from the API as documented.
-async function readJsonObject(
-    response: Response,
-): Promise<{ ok: true; body: object } | { ok: false; rawBody: string }> {
-    const rawBody = await response.text();
-    const body = parseJson(rawBody);
-    return isPlainObject(body) ? { ok: true, body } : { ok: false, rawBody };
-}
-
-function parseJson(text: string): unknown {
-    try {
-        return fromJson(text);
-    } catch {
-        return undefined;
-    }
+function isJsonContentType(contentType: string | null): boolean {
+    const mediaType = contentType?.split(";")[0]?.trim().toLowerCase() ?? "";
+    return mediaType === "application/json" || mediaType === "text/json" || mediaType.endsWith("+json");
 }
 
 export async function fetcherImpl<R = unknown>(args: Fetcher.Args): Promise<APIResponse<R, Fetcher.Error>> {
@@ -229,7 +216,7 @@ export async function fetcherImpl<R = unknown>(args: Fetcher.Args): Promise<APIR
             args.abortSignal,
         );
 
-        if (response.status >= 200 && response.status < 300) {
+        if (response.status >= 200 && response.status < 400) {
             if (logger.isDebug()) {
                 const metadata = {
                     method: args.method,
@@ -239,23 +226,19 @@ export async function fetcherImpl<R = unknown>(args: Fetcher.Args): Promise<APIR
                 };
                 logger.debug("HTTP request succeeded", metadata);
             }
-            if (args.responseType == null || args.responseType === "json") {
-                const read = await readJsonObject(response);
-                if (!read.ok) {
-                    return {
-                        ok: false,
-                        error: { reason: "non-json", statusCode: response.status, rawBody: read.rawBody },
-                        rawResponse: toRawResponse(response),
-                    };
-                }
+            const body = await getResponseBody(response, args.responseType);
+            // Only a body the server labelled as JSON is an error here; void endpoints may return plain text.
+            if (
+                isResponseBodyError(body) &&
+                body.error.reason === "non-json" &&
+                isJsonContentType(response.headers.get("Content-Type"))
+            ) {
                 return {
-                    ok: true,
-                    body: read.body as R,
-                    headers: response.headers,
+                    ok: false,
+                    error: body.error,
                     rawResponse: toRawResponse(response),
                 };
             }
-            const body = await getResponseBody(response, args.responseType);
             return {
                 ok: true,
                 body: body as R,
@@ -272,14 +255,13 @@ export async function fetcherImpl<R = unknown>(args: Fetcher.Args): Promise<APIR
                 };
                 logger.error("HTTP request failed with error status", metadata);
             }
-            // The endpoints parse the body of an error status they document as the API's error object, which
-            // throws for any other body and loses the status, so such a body is reported with its raw text.
-            const read = await readJsonObject(response);
             return {
                 ok: false,
-                error: read.ok
-                    ? { reason: "status-code", statusCode: response.status, body: read.body }
-                    : { reason: "non-json", statusCode: response.status, rawBody: read.rawBody },
+                error: {
+                    reason: "status-code",
+                    statusCode: response.status,
+                    body: await getErrorResponseBody(response),
+                },
                 rawResponse: toRawResponse(response),
             };
         }
