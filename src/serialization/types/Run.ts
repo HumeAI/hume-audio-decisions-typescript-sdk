@@ -14,7 +14,7 @@ export const Run: core.serialization.ObjectSchema<serializers.Run.Raw, Decisions
     startedAt: core.serialization.property("started_at", core.serialization.date()),
     endedAt: core.serialization.property("ended_at", core.serialization.date()),
     received: RunReceived,
-    request: DecisionsRequest,
+    request: DecisionsRequest.nullable(),
 });
 
 export declare namespace Run {
@@ -25,6 +25,6 @@ export declare namespace Run {
         started_at: string;
         ended_at: string;
         received: RunReceived.Raw;
-        request: DecisionsRequest.Raw;
+        request?: DecisionsRequest.Raw | null;
     }
 }
