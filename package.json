@@ -1,6 +1,6 @@
 {
     "name": "@humeai/audio-decisions",
-    "version": "0.3.1",
+    "version": "0.3.2",
     "private": false,
     "repository": {
         "type": "git",
@@ -67,10 +67,21 @@
             },
             "default": "./dist/cjs/audio-helpers/index.js"
         },
+        "./audio-helpers": {
+            "import": {
+                "types": "./dist/esm/audio-helpers/index.d.mts",
+                "default": "./dist/esm/audio-helpers/index.mjs"
+            },
+            "require": {
+                "types": "./dist/cjs/audio-helpers/index.d.ts",
+                "default": "./dist/cjs/audio-helpers/index.js"
+            },
+            "default": "./dist/cjs/audio-helpers/index.js"
+        },
         "./package.json": "./package.json"
     },
     "files": [
-        "dist",
+
         "reference.md",
         "README.md",
         "LICENSE"

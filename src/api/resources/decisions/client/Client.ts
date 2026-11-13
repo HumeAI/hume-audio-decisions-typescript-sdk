@@ -552,6 +552,48 @@ export class DecisionsClient {
     /**
      * Cuts a recording longer than `create` accepts into chunks and sends each chunk to the model in its own `create` request. The recording is never sent as one file. The model processes each chunk independently, hearing only that chunk, so every answer describes its chunk alone and nothing combines the answers across chunks. Each request has its own `runId` and its own billing. Each chunk's result is yielded as soon as its request is done, so it can be saved or reported before the next chunk is sent.
      *
+     * A request the API rejects, or whose connection fails, does not reject. Its error is recorded on the chunk, and the responses already received are returned with it, so check `complete` before relying on the result. Aborting `requestOptions.abortSignal` rejects with the `DecisionsError` that `create` rejects with when aborted, and no further chunk is sent. To resume a job that stopped, pass the result's `resumeMs` as `startMs` to a new job with the same `endMs`. Chunks that failed before the stop because their audio could not be decoded are not sent again, so the new job's `complete` covers only the range it sent.
+     *
+     * @param request `request` is sent unchanged with every chunk. `file` is the recording, an MP3 or WAV file, and each chunk is uploaded with the filename and content type it gives. The other fields are the options of `iterAudioChunks`.
+     * @param {DecisionsClient.RequestOptions} requestOptions - Request-specific configuration, applied to every chunk's request.
+     * @returns Each chunk's position in the recording and its response or error, in the order of the chunks.
+     *
+     * @throws {TypeError} If `maxChunkMs`, `startMs` or `endMs` is not a safe integer, or `file` is a string. Nothing has been sent.
+     * @throws {RangeError} If an option is out of range or the recording cannot be split as requested. Nothing has been sent.
+     * @throws {UnsupportedAudioError} If the recording is empty or not a file `iterAudioChunks` supports, or if `downmixStrategy` is "first_channel" and the recording is an MP3 file with a frame of two channels. Nothing has been sent.
+     * @throws {@link errors.DecisionsError} If `requestOptions.abortSignal` aborts.
+     *
+     * @example
+     *     const result = await client.decisions.createChunked({
+     *         file: { path: "call.mp3" },
+     *         request: {
+     *             questions: {
+     *                 "agent_glitches": {
+     *                     type: "span",
+     *                     instructions: "Where does the agent glitch, slur or sound robotic?"
+     *                 }
+     *             }
+     *         },
+     *         maxChunkMs: 300000
+     *     });
+     *     for (const chunk of result.chunks) {
+     *         if (chunk.status === "succeeded") {
+     *             console.log(chunk.startMs, chunk.response.runId);
+     *         } else {
+     *             console.log(chunk.startMs, chunk.status, chunk.error);
+     *         }
+     *     }
+     */
+    public async createChunked(
+        request: Decisions.DecisionsUpload & iterAudioChunks.Options,
+        requestOptions?: DecisionsClient.RequestOptions,
+    ): Promise<ChunkedDecisionsResult> {
+        return collectResults(this.iterCreateChunked(request, requestOptions), request.startMs);
+    }
+
+    /**
+     * Cuts a recording longer than `create` accepts into chunks and sends each chunk to the model in its own `create` request. The recording is never sent as one file. The model processes each chunk independently, hearing only that chunk, so every answer describes its chunk alone and nothing combines the answers across chunks. Each request has its own `runId` and its own billing. Each chunk's result is yielded as soon as its request is done, so it can be saved or reported before the next chunk is sent.
+     *
      * The chunks are cut by `iterAudioChunks` in `@humeai/audio-decisions/audio-helpers`, which describes where cuts fall in MP3 and WAV files and how each option works, and are sent one at a time, in order. Each request asks the same questions with the same context. A span's times are measured from the start of its chunk, so add the chunk's `startMs` to place it in the recording.
      *
      * The whole recording is read into memory before the first request, so that a file that cannot be split is rejected before anything is sent and billed. A WAV file is mixed down before it is cut, as `downmixStrategy` asks. Each chunk is copied only while its request is sent, so memory use stays near the size of the recording and its mixed-down copy. An hour of 16-bit stereo WAV at 48 kHz is about 690 MB, and about 230 MB once mixed down.
@@ -636,3 +678,4 @@ export class DecisionsClient {
         return collectResults(this.iterCreateChunked(request, requestOptions), request.startMs);
     }
 }
+

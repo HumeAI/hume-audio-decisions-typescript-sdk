@@ -16,6 +16,6 @@ export interface Run {
     /** When the run ended. */
     endedAt: Date;
     received: Decisions.RunReceived;
-    /** The `request` part the run evaluated: its `context` and `questions`, as sent. */
-    request: Decisions.DecisionsRequest;
+    /** The `request` part the run evaluated: its `context` and `questions`, as sent. `null` when the organization has zero data retention, which keeps nothing a run was sent or answered. */
+    request: Decisions.DecisionsRequest | null;
 }
