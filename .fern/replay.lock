@@ -108,14 +108,20 @@ generations:
     cli_version: unknown
     generator_versions:
       fernapi/fern-typescript-sdk: 3.108.0
-current_generation: 9180f9c1bd1d0496683d58bd980a095e703eb8c5
+  - commit_sha: 3fdec43963faf4cf2a8dba84c95e8171f0bd2aac
+    tree_hash: c27f29cedfedaa8e2a105c2c53d78acdd8a3fb75
+    timestamp: 2026-11-13T22:59:29.673Z
+    cli_version: unknown
+    generator_versions:
+      fernapi/fern-typescript-sdk: 3.108.0
+current_generation: 3fdec43963faf4cf2a8dba84c95e8171f0bd2aac
 patches:
   - id: patch-9b37cd53
     content_hash: sha256:533314c39b2aded39fa4305e3e7f210f2ed96642a8ff5f1f134a5579882161cb
     original_commit: 9b37cd531065801be38abacda2412f6236d9e1bc
     original_message: Publish only from version tags that match the package version, using trusted publishing through a registry environment
     original_author: zach <zachary.greathouse@hume.ai>
-    base_generation: 9180f9c1bd1d0496683d58bd980a095e703eb8c5
+    base_generation: 3fdec43963faf4cf2a8dba84c95e8171f0bd2aac
     files:
       - .github/workflows/ci.yml
     patch_content: |+
@@ -1353,6 +1359,7 @@ patches:
             }
         }
     user_owned: true
+    status: unresolved
   - id: patch-17cf83b6
     content_hash: sha256:cbdda6ddb084bc2740b639a31ed057bfde5154d15326523de69763b8b27d751b
     original_commit: 17cf83b65295cf8cce80a7a615a917d9775711da
@@ -2291,6 +2298,7 @@ patches:
             }
         }
     user_owned: true
+    status: unresolved
   - id: patch-d4ddf2b6
     content_hash: sha256:533314c39b2aded39fa4305e3e7f210f2ed96642a8ff5f1f134a5579882161cb
     original_commit: d4ddf2b6535871afcaa5ccb54411b3b3cefb8616
@@ -2456,6 +2464,7 @@ patches:
                     fi
                   fi
     user_owned: true
+    status: unresolved
   - id: patch-85e7a158
     content_hash: sha256:f37cf347df4f0874c232cb8861b6487fed4da5d88d11f880c89698df15ba5586
     original_commit: 85e7a1589dbc8ca5f4fba81eb0323eb8966fb0f2
@@ -3521,6 +3530,7 @@ patches:
                 return collectResults(this.iterCreateChunked(request, requestOptions), request.startMs);
             }
         }
+    status: unresolved
   - id: patch-d63a3545
     content_hash: sha256:4381c17987fa9a6fe6498071a8f58f517bad038b66207b56c5cac05ef62d3fd2
     original_commit: d63a354556f83f74c6090fea5aa1315028823257
@@ -4564,12 +4574,13 @@ patches:
         }
       src/version.ts: |
         export const SDK_VERSION = "0.3.1";
+    status: unresolved
   - id: patch-51bcce11
     content_hash: sha256:e1c27ab91f98cae788ebb370cacb9e717067c10d71177bbec07972cc7975f29c
     original_commit: 51bcce11ff9efeb41b09b2541d3d585a109e51b1
     original_message: Stop following redirects and reject any response body that is not a JSON object with a DecisionsError that keeps its status and raw text, so the API key never leaves the API's origin and no status or bad success is lost to ParseError
     original_author: zach <zachary.greathouse@hume.ai>
-    base_generation: 9180f9c1bd1d0496683d58bd980a095e703eb8c5
+    base_generation: 3fdec43963faf4cf2a8dba84c95e8171f0bd2aac
     files:
       - src/core/fetcher/Fetcher.ts
       - src/core/fetcher/makeRequest.ts
@@ -6233,6 +6244,7 @@ patches:
                 });
             });
         });
+    user_owned: true
   - id: patch-f46e849f
     content_hash: sha256:d1b08bf0a3fb65a3dc54d2b792d8ab72e8b687253a6787d792d2e2df2a672e76
     original_commit: f46e849fbb5058889ee28815b18d4f5b82552e93
@@ -6718,3 +6730,4 @@ patches:
         }
 
         export const fetcher: FetchFunction = fetcherImpl;
+    status: unresolved
